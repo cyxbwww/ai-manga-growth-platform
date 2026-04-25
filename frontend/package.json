@@ -1,0 +1,22 @@
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.2",
+    "axios": "^1.13.2",
+    "echarts": "^6.0.0",
+    "naive-ui": "^2.43.2",
+    "pinia": "^3.0.4",
+    "vite": "^7.2.7",
+    "vue": "^3.5.26",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.3",
+    "typescript": "~5.9.3",
+    "vue-tsc": "^3.1.8"
+  }
+}

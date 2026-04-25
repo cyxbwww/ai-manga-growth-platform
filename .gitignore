@@ -1,0 +1,17 @@
+# 前端依赖和构建产物
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# 后端虚拟环境和缓存
+backend/.env
+backend/venv/
+backend/__pycache__/
+backend/app/**/__pycache__/
+backend/data/*.db
+
+# 本地真实环境变量
+.env
+
+# 本地工具缓存
+.pytest_cache/
