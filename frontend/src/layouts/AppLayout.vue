@@ -30,7 +30,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { MenuOption } from 'naive-ui'
 import { useAppStore } from '../stores/app'
 
-// 菜单数据：覆盖从内容生产到投放分析的完整面试演示链路。
+// 菜单数据：覆盖从内容生产、素材上传到投放分析的完整演示链路。
 const menus = [
   { label: '行业增长看板', key: 'dashboard', path: '/dashboard' },
   { label: '内容策划', key: 'content-planning', path: '/content-planning' },
@@ -38,6 +38,7 @@ const menus = [
   { label: 'AI分镜制作', key: 'storyboard', path: '/storyboard' },
   { label: '多语种本地化', key: 'localization', path: '/localization' },
   { label: '海外投放素材', key: 'ad-materials', path: '/ad-materials' },
+  { label: '素材上传与预览', key: 'media-assets', path: '/media-assets' },
   { label: '增长分析', key: 'growth-analytics', path: '/growth-analytics' },
 ]
 
@@ -63,14 +64,12 @@ const pageTitle = computed(() => {
 // 菜单切换：使用路由跳转，保证刷新后状态可恢复。
 function handleMenuChange(key: string) {
   const target = menus.find((item) => item.key === key)
-  if (target) {
-    router.push(target.path)
-  }
+  if (target) router.push(target.path)
 }
 </script>
 
 <style scoped>
-/* 布局样式：后台工具型界面，强调清晰、稳定和可演示。 */
+/* 后台工具型布局：强调清晰、稳定和可演示。 */
 .app-shell {
   min-height: 100vh;
 }

@@ -4,3 +4,4 @@ python-dotenv
 pydantic
 sqlalchemy
 openai
+boto3

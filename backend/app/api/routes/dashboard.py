@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.models.ad_material import AdMaterial
 from app.models.content_plan import ContentPlan
 from app.models.localization import Localization
+from app.models.media_asset import MediaAsset
 from app.models.script_polish import ScriptPolish
 from app.models.storyboard import Storyboard
 
@@ -22,7 +23,7 @@ def count_today(db: Session, model) -> int:
 
 @router.get("/summary")
 def get_dashboard_summary(db: Session = Depends(get_db)):
-    # 看板汇总接口：从 SQLite 读取真实生成记录统计。
+    # 看板汇总接口：从 SQLite 读取真实生成记录和素材记录统计。
     today_content_plans = count_today(db, ContentPlan)
     today_script_polishes = count_today(db, ScriptPolish)
     today_storyboards = count_today(db, Storyboard)
@@ -46,5 +47,9 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
             "todayLocalizations": today_localizations,
             "todayAdMaterials": today_ad_materials,
             "totalRecords": total_records,
+            "mediaTotal": db.query(MediaAsset).count(),
+            "mediaVideos": db.query(MediaAsset).filter(MediaAsset.file_type == "video").count(),
+            "mediaImages": db.query(MediaAsset).filter(MediaAsset.file_type == "image").count(),
+            "mediaUploaded": db.query(MediaAsset).filter(MediaAsset.status == "uploaded").count(),
         },
     }

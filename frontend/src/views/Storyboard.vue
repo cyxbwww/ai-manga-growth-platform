@@ -72,7 +72,11 @@
                       <span class="scene-index">#{{ scene.sceneNo }}</span>
                       <div class="scene-title story-content">{{ sceneView(scene).title }}</div>
                     </div>
-                    <n-tag :type="statusType(scene.status)" bordered>{{ scene.status }}</n-tag>
+                    <n-space align="center">
+                      <n-tag type="default" bordered>待上传</n-tag>
+                      <n-button size="small" secondary @click="router.push('/media-assets')">上传镜头素材</n-button>
+                      <n-tag :type="statusType(scene.status)" bordered>{{ scene.status }}</n-tag>
+                    </n-space>
                   </div>
 
                   <div class="story-card-body">
@@ -155,6 +159,7 @@
                 </article>
               </div>
               <div class="next-step-row">
+                <n-button secondary @click="router.push('/media-assets')">上传分镜素材</n-button>
                 <n-button type="primary" secondary @click="router.push('/localization')">进入多语种本地化</n-button>
               </div>
             </template>

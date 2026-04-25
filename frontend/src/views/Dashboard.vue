@@ -9,6 +9,17 @@
       </n-grid-item>
     </n-grid>
 
+    <n-card title="素材资产统计" :bordered="false">
+      <n-grid :cols="4" :x-gap="12" :y-gap="12" responsive="screen">
+        <n-grid-item v-for="item in mediaCards" :key="item.label">
+          <div class="media-stat">
+            <div class="metric small">{{ item.value }}</div>
+            <div class="hint">{{ item.label }}</div>
+          </div>
+        </n-grid-item>
+      </n-grid>
+    </n-card>
+
     <n-card title="当前生产链路" :bordered="false">
       <div class="pipeline-header">
         <div>
@@ -76,6 +87,10 @@ type DashboardSummary = {
   todayLocalizations: number
   todayAdMaterials: number
   totalRecords: number
+  mediaTotal: number
+  mediaVideos: number
+  mediaImages: number
+  mediaUploaded: number
 }
 
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -92,6 +107,10 @@ const summary = reactive<DashboardSummary>({
   todayLocalizations: 0,
   todayAdMaterials: 0,
   totalRecords: 0,
+  mediaTotal: 0,
+  mediaVideos: 0,
+  mediaImages: 0,
+  mediaUploaded: 0,
 })
 
 const metricCards = computed(() => [
@@ -101,6 +120,13 @@ const metricCards = computed(() => [
   { label: '今日本地化', value: summary.todayLocalizations, hint: '多语种本地化次数' },
   { label: '今日广告素材', value: summary.todayAdMaterials, hint: '投放素材生成次数' },
   { label: '总生成记录', value: summary.totalRecords, hint: 'SQLite 中累计记录数' },
+])
+
+const mediaCards = computed(() => [
+  { label: '素材总数', value: summary.mediaTotal },
+  { label: '视频素材数', value: summary.mediaVideos },
+  { label: '图片素材数', value: summary.mediaImages },
+  { label: '已上传素材数', value: summary.mediaUploaded },
 ])
 
 const pipelineCards = computed(() => [
@@ -113,16 +139,12 @@ const pipelineCards = computed(() => [
 
 async function loadSummary() {
   const result = await request.get<unknown, ApiResponse<DashboardSummary>>('/dashboard/summary')
-  if (result.code === 0) {
-    Object.assign(summary, result.data)
-  }
+  if (result.code === 0) Object.assign(summary, result.data)
 }
 
 async function loadAiStatus() {
   const result = await getAiStatus()
-  if (result.code === 0) {
-    aiStatus.value = result.data
-  }
+  if (result.code === 0) aiStatus.value = result.data
 }
 
 async function loadPipelineDetail() {
@@ -150,10 +172,7 @@ function renderChart() {
   chart.setOption({
     tooltip: { trigger: 'axis' },
     grid: { left: 40, right: 20, top: 32, bottom: 28 },
-    xAxis: {
-      type: 'category',
-      data: ['策划', '剧本', '分镜', '本地化', '广告'],
-    },
+    xAxis: { type: 'category', data: ['策划', '剧本', '分镜', '本地化', '广告'] },
     yAxis: { type: 'value', minInterval: 1 },
     series: [
       {
@@ -179,7 +198,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 看板样式：聚焦真实统计、AI 状态和当前生产链路。 */
+/* 看板样式：聚焦真实统计、素材资产、AI 状态和当前生产链路。 */
 .dashboard {
   display: flex;
   flex-direction: column;
@@ -193,10 +212,21 @@ onMounted(async () => {
   line-height: 1.2;
 }
 
+.metric.small {
+  font-size: 28px;
+}
+
 .hint {
   margin-top: 8px;
   color: #6b7280;
   font-size: 13px;
+}
+
+.media-stat {
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfcff;
 }
 
 .pipeline-header,

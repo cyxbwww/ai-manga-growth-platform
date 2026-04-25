@@ -13,6 +13,7 @@ from app.api.routes.content import router as content_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.health import router as health_router
 from app.api.routes.localization import router as localization_router
+from app.api.routes.media import router as media_router
 from app.api.routes.pipeline import router as pipeline_router
 from app.api.routes.script import router as script_router
 from app.api.routes.storyboard import router as storyboard_router
@@ -45,6 +46,7 @@ app.include_router(content_router, prefix=API_PREFIX)
 app.include_router(script_router, prefix=API_PREFIX)
 app.include_router(storyboard_router, prefix=API_PREFIX)
 app.include_router(localization_router, prefix=API_PREFIX)
+app.include_router(media_router, prefix=API_PREFIX)
 app.include_router(ads_router, prefix=API_PREFIX)
 app.include_router(analytics_router, prefix=API_PREFIX)
 app.include_router(ai_router, prefix=API_PREFIX)
