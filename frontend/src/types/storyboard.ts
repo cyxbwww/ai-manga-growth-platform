@@ -8,29 +8,35 @@ export type StoryboardGenerateRequest = {
   scriptPolishId?: number | null
 }
 
-// 单个分镜的可切换双语字段。
-export type StoryboardSceneBilingualFields = {
-  title: string
-  scene: string
-  characterAction: string
-  dialogue: string
-  emotion: string
-  visualPrompt: string
-  motionPrompt: string
-  consistencyPrompt: string
+// 单个分镜的文本字段：兼容旧顶层字段和新版 bilingual 对象字段。
+export type StoryboardSceneText = {
+  title?: string
+  scene?: string
+  characterAction?: string
+  dialogue?: string
+  emotion?: string
+  visualPrompt?: string
+  motionPrompt?: string
+  consistencyPrompt?: string
 }
 
-// 单个分镜数据：bilingual 可选，兼容旧历史记录。
-export type StoryboardScene = StoryboardSceneBilingualFields & {
+// 单个分镜数据：bilingual 可选，并兼容 string / object 两种返回形式。
+export type StoryboardScene = StoryboardSceneText & {
+  sceneNo?: number
+  sceneNumber?: number
+  duration?: string
+  status?: string
+  bilingual?: {
+    zh?: string | StoryboardSceneText
+    target?: string | (StoryboardSceneText & { language?: string })
+  }
+}
+
+// 归一化后用于页面展示的分镜字段，所有字段都有兜底文本。
+export type StoryboardSceneDisplay = Required<StoryboardSceneText> & {
   sceneNo: number
   duration: string
   status: string
-  bilingual?: {
-    zh: StoryboardSceneBilingualFields
-    target: StoryboardSceneBilingualFields & {
-      language: string
-    }
-  }
 }
 
 // 分镜生成结果：右侧以卡片形式展示可生产化内容。

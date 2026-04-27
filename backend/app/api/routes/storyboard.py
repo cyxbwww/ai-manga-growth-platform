@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -16,7 +16,21 @@ from app.services.ai_service import generate_json
 
 router = APIRouter(prefix="/storyboard")
 
-SYSTEM_PROMPT = "你是一个 AI漫剧出海内容生产助手。你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
+SYSTEM_PROMPT = (
+    "你是一个 AI漫剧出海内容生产助手，擅长把短剧剧本拆解为可生产的分镜数据。"
+    "你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
+)
+
+SCENE_TEXT_FIELDS = [
+    "title",
+    "scene",
+    "characterAction",
+    "dialogue",
+    "emotion",
+    "visualPrompt",
+    "motionPrompt",
+    "consistencyPrompt",
+]
 
 
 class StoryboardGenerateRequest(BaseModel):
@@ -28,13 +42,17 @@ class StoryboardGenerateRequest(BaseModel):
     scriptPolishId: Optional[int] = None
 
 
+def text_or_empty(value: Any) -> str:
+    return value if isinstance(value, str) else ""
+
+
 def build_scene(index: int, style: str, title: str) -> dict:
-    # mock 分镜：用于普通生成和无 AI 时的流式 fallback。
+    # mock fallback 也必须返回完整 bilingual 对象，保证前端切换语言时不会出现空白。
     duration = "4秒" if index <= 2 else "5秒"
     zh = {
         "title": f"{title} 分镜 {index}",
         "scene": f"第{index}幕发生在高压对峙场景中，镜头聚焦主角与对手的情绪变化。",
-        "characterAction": "主角从被动沉默转为主动出击，抬眼、停顿、亮出关键证据。",
+        "characterAction": "主角从被动沉默转为主动反击，抬眼、停顿、亮出关键证据。",
         "dialogue": "主角：今天结束的不是婚礼，是你们的谎言。",
         "emotion": ["压迫", "震惊", "反击", "反转", "释放", "悬念", "决断", "追更"][(index - 1) % 8],
         "visualPrompt": f"{style}，竖屏漫剧分镜，第{index}幕，婚礼现场强冲突，主角冷静反击，电影级灯光，适合AI图片生成",
@@ -44,15 +62,22 @@ def build_scene(index: int, style: str, title: str) -> dict:
     target = {
         "language": "英文",
         "title": f"{title} storyboard scene {index}",
-        "scene": f"Scene {index} takes place in a high-pressure confrontation.",
-        "characterAction": "The heroine looks up, pauses, and reveals decisive evidence.",
+        "scene": f"Scene {index} takes place in a high-pressure confrontation, focusing on the emotional shift between the heroine and her opponents.",
+        "characterAction": "The heroine moves from silence to a decisive counterattack, raises her eyes, pauses, and reveals key evidence.",
         "dialogue": "Heroine: This wedding is not ending today. Your lies are.",
         "emotion": "comeback",
-        "visualPrompt": f"{style}, vertical AI manga drama storyboard, scene {index}, intense wedding confrontation, cinematic lighting",
-        "motionPrompt": f"Camera pushes from mockery to heroine's calm eyes, then document close-up, {duration}",
-        "consistencyPrompt": "Keep heroine and male lead appearance consistent across all scenes.",
+        "visualPrompt": f"{style}, vertical AI manga drama storyboard, scene {index}, intense wedding confrontation, calm heroine counterattack, cinematic lighting, suitable for AI image generation",
+        "motionPrompt": f"Camera pushes from the opponent's mocking face to the heroine's calm eyes, then cuts to a document close-up, {duration}, emotion shifts from pressure to comeback",
+        "consistencyPrompt": "Keep the heroine's long black hair, calm eyes, and white wedding dress consistent; keep the male lead's dark suit and wedding venue consistent.",
     }
-    return {"sceneNo": index, "duration": duration, **zh, "status": "待生成", "bilingual": {"zh": zh, "target": target}}
+    return {
+        "sceneNo": index,
+        "sceneNumber": index,
+        "duration": duration,
+        **zh,
+        "status": "待生成",
+        "bilingual": {"zh": zh, "target": target},
+    }
 
 
 def build_storyboard_result(payload: StoryboardGenerateRequest) -> dict:
@@ -67,20 +92,122 @@ def build_storyboard_result(payload: StoryboardGenerateRequest) -> dict:
 def build_user_prompt(payload: StoryboardGenerateRequest) -> str:
     return f"""
 请把以下剧本拆解成可生产的 AI 漫剧分镜。
+
 剧本标题：{payload.title}
 剧本文本：{payload.script}
 画面风格：{payload.style}
 分镜数量：{payload.sceneCount}
-要求：scenes 数量必须等于 {payload.sceneCount}；status 使用“待生成”；同时输出 bilingual.zh 和 bilingual.target。
-只返回 JSON 对象，字段包含 storyboardTitle、style、scenes。
+
+必须返回 JSON 对象，顶层字段包含：
+- storyboardTitle: string
+- style: string
+- scenes: array
+
+每个 scene 必须包含以下字段：
+- sceneNo: number
+- sceneNumber: number
+- title: string
+- duration: string
+- scene: string
+- characterAction: string
+- dialogue: string
+- emotion: string
+- visualPrompt: string
+- motionPrompt: string
+- consistencyPrompt: string
+- status: "待生成"
+- bilingual: object
+
+重要要求：
+1. scenes 数量必须等于 {payload.sceneCount}。
+2. 顶层 title、scene、characterAction、dialogue、emotion、visualPrompt、motionPrompt、consistencyPrompt 默认使用中文版本。
+3. 每个 scene 的 bilingual.zh 和 bilingual.target 必须是对象，不允许是字符串。
+4. bilingual.zh 对象必须包含 title、scene、characterAction、dialogue、emotion、visualPrompt、motionPrompt、consistencyPrompt。
+5. bilingual.target 对象必须包含 language、title、scene、characterAction、dialogue、emotion、visualPrompt、motionPrompt、consistencyPrompt。
+6. visualPrompt 要能直接用于 AI 图片生成。
+7. motionPrompt 要能直接用于图生视频。
+8. consistencyPrompt 用于保证角色一致性。
+9. 只返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。
 """
 
 
+def normalize_bilingual_value(value: Any, scene: dict, scene_no: int, language: str | None = None) -> dict:
+    # AI 有时会把 bilingual.zh / target 返回成字符串，这里统一转换为完整对象，避免前端字段为空。
+    if isinstance(value, dict):
+        source = value
+        scene_text = text_or_empty(source.get("scene"))
+    elif isinstance(value, str):
+        source = {}
+        scene_text = value
+    else:
+        source = {}
+        scene_text = ""
+
+    normalized = {
+        "title": text_or_empty(source.get("title")) or text_or_empty(scene.get("title")) or f"分镜{scene_no}",
+        "scene": scene_text or text_or_empty(scene.get("scene")),
+        "characterAction": text_or_empty(source.get("characterAction")) or text_or_empty(scene.get("characterAction")),
+        "dialogue": text_or_empty(source.get("dialogue")) or text_or_empty(scene.get("dialogue")),
+        "emotion": text_or_empty(source.get("emotion")) or text_or_empty(scene.get("emotion")),
+        "visualPrompt": text_or_empty(source.get("visualPrompt")) or text_or_empty(scene.get("visualPrompt")),
+        "motionPrompt": text_or_empty(source.get("motionPrompt")) or text_or_empty(scene.get("motionPrompt")),
+        "consistencyPrompt": text_or_empty(source.get("consistencyPrompt")) or text_or_empty(scene.get("consistencyPrompt")),
+    }
+    if language is not None:
+        normalized["language"] = text_or_empty(source.get("language")) or language
+    return normalized
+
+
+def normalize_scene(scene: Any, index: int, fallback_scene: dict) -> dict:
+    # 统一 sceneNo / sceneNumber，并保证顶层字段、bilingual.zh、bilingual.target 都是完整结构。
+    if not isinstance(scene, dict):
+        scene = {}
+
+    scene_no = scene.get("sceneNo") or scene.get("sceneNumber") or index
+    try:
+        scene_no = int(scene_no)
+    except Exception:
+        scene_no = index
+
+    merged = {**fallback_scene, **scene}
+    merged["sceneNo"] = scene_no
+    merged["sceneNumber"] = scene_no
+    merged["duration"] = text_or_empty(merged.get("duration")) or text_or_empty(fallback_scene.get("duration")) or "4秒"
+    merged["status"] = text_or_empty(merged.get("status")) or "待生成"
+
+    bilingual = merged.get("bilingual") if isinstance(merged.get("bilingual"), dict) else {}
+    zh = normalize_bilingual_value(bilingual.get("zh"), merged, scene_no)
+    target = normalize_bilingual_value(bilingual.get("target"), merged, scene_no, "目标语言")
+
+    # 顶层字段默认使用中文版本，方便中文页面和旧逻辑直接展示。
+    for field in SCENE_TEXT_FIELDS:
+        merged[field] = zh[field] or text_or_empty(fallback_scene.get(field))
+
+    merged["bilingual"] = {"zh": zh, "target": target}
+    return merged
+
+
 def normalize_storyboard_result(result: dict, fallback_data: dict, scene_count: int) -> dict:
-    scenes = result.get("scenes") if isinstance(result, dict) else None
-    if not isinstance(scenes, list) or len(scenes) != scene_count:
-        return fallback_data
-    return result
+    # 不信任 AI 原始结构：到前端前强制补齐 scenes 数量和每个 scene 的 bilingual 对象字段。
+    if not isinstance(result, dict):
+        result = {}
+
+    fallback_scenes = fallback_data["scenes"]
+    raw_scenes = result.get("scenes")
+    if not isinstance(raw_scenes, list):
+        raw_scenes = []
+
+    normalized_scenes = []
+    for index in range(1, scene_count + 1):
+        raw_scene = raw_scenes[index - 1] if index - 1 < len(raw_scenes) else {}
+        fallback_scene = fallback_scenes[index - 1] if index - 1 < len(fallback_scenes) else build_scene(index, fallback_data["style"], fallback_data["storyboardTitle"])
+        normalized_scenes.append(normalize_scene(raw_scene, index, fallback_scene))
+
+    return {
+        "storyboardTitle": text_or_empty(result.get("storyboardTitle")) or fallback_data["storyboardTitle"],
+        "style": text_or_empty(result.get("style")) or fallback_data["style"],
+        "scenes": normalized_scenes,
+    }
 
 
 def sse_event(payload: dict) -> str:
@@ -146,6 +273,7 @@ def stream_storyboard(payload: StoryboardGenerateRequest, db: Session = Depends(
         except Exception as exc:
             print(f"DeepSeek 分镜流式生成失败，使用 mock fallback: {exc}")
             result = fallback_data
+        result = normalize_storyboard_result(result, fallback_data, payload.sceneCount)
         for scene in result["scenes"]:
             yield sse_event({"type": "scene", "data": scene})
             time.sleep(0.3)
@@ -158,19 +286,28 @@ def stream_storyboard(payload: StoryboardGenerateRequest, db: Session = Depends(
 @router.get("/list")
 def get_storyboard_history(db: Session = Depends(get_db)):
     records = db.query(Storyboard).order_by(Storyboard.created_at.desc()).limit(20).all()
-    data = [
-        {
-            "id": item.id,
-            "recordId": item.id,
-            "contentPlanId": item.content_plan_id,
-            "scriptPolishId": item.script_polish_id,
-            "title": item.title,
-            "script": item.script,
-            "style": item.style,
-            "sceneCount": item.scene_count,
-            "result": json.loads(item.result_json),
-            "createdAt": item.created_at.isoformat(),
-        }
-        for item in records
-    ]
+    data = []
+    for item in records:
+        fallback_payload = StoryboardGenerateRequest(title=item.title, script=item.script, style=item.style, sceneCount=item.scene_count)
+        fallback_data = build_storyboard_result(fallback_payload)
+        try:
+            raw_result = json.loads(item.result_json)
+        except Exception:
+            raw_result = fallback_data
+        # 历史记录可能保存的是旧结构，这里复用生成接口的归一化逻辑，保证前端点击历史也不会空白。
+        result = normalize_storyboard_result(raw_result, fallback_data, item.scene_count)
+        data.append(
+            {
+                "id": item.id,
+                "recordId": item.id,
+                "contentPlanId": item.content_plan_id,
+                "scriptPolishId": item.script_polish_id,
+                "title": item.title,
+                "script": item.script,
+                "style": item.style,
+                "sceneCount": item.scene_count,
+                "result": result,
+                "createdAt": item.created_at.isoformat(),
+            }
+        )
     return {"code": 0, "message": "success", "data": data}

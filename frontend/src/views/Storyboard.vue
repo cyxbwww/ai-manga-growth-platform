@@ -66,22 +66,21 @@
               </div>
 
               <div class="storyboard-stack">
-                <article v-for="scene in result.scenes" :key="scene.sceneNo" class="story-card">
+                <article v-for="scene in result.scenes" :key="getSceneDisplay(scene).sceneNo" class="story-card">
                   <div class="story-card-header">
                     <div class="scene-title-row">
-                      <span class="scene-index">#{{ scene.sceneNo }}</span>
-                      <div class="scene-title story-content">{{ sceneView(scene).title }}</div>
+                      <span class="scene-index">#{{ getSceneDisplay(scene).sceneNo }}</span>
+                      <div class="scene-title story-content">{{ getSceneDisplay(scene).title }}</div>
                     </div>
                     <n-space align="center">
                       <n-tag type="default" bordered>待上传</n-tag>
                       <n-button size="small" secondary @click="router.push('/media-assets')">上传镜头素材</n-button>
-                      <n-tag :type="statusType(scene.status)" bordered>{{ scene.status }}</n-tag>
+                      <n-tag :type="statusType(getSceneDisplay(scene).status)" bordered>{{ getSceneDisplay(scene).status }}</n-tag>
                     </n-space>
                   </div>
 
                   <div class="story-card-body">
                     <div class="story-image">
-                      <span class="scene-index image-index">#{{ scene.sceneNo }}</span>
                       <div>
                         <div class="image-placeholder-title">待生成画面</div>
                         <div class="image-placeholder-sub">{{ result.style }}</div>
@@ -94,19 +93,19 @@
                         <div class="info-grid">
                           <div class="info-item">
                             <div class="info-label">标题</div>
-                            <div class="info-text story-content">{{ sceneView(scene).title }}</div>
+                            <div class="info-text story-content">{{ getSceneDisplay(scene).title }}</div>
                           </div>
                           <div class="info-item compact">
                             <div class="info-label">时长</div>
-                            <div class="info-text story-content">{{ scene.duration }}</div>
+                            <div class="info-text story-content">{{ getSceneDisplay(scene).duration }}</div>
                           </div>
                           <div class="info-item">
                             <div class="info-label">情绪</div>
-                            <div class="info-text story-content">{{ sceneView(scene).emotion }}</div>
+                            <div class="info-text story-content">{{ getSceneDisplay(scene).emotion }}</div>
                           </div>
                           <div class="info-item compact">
                             <div class="info-label">状态</div>
-                            <div class="info-text status-text">{{ scene.status }}</div>
+                            <div class="info-text status-text">{{ getSceneDisplay(scene).status }}</div>
                           </div>
                         </div>
                       </section>
@@ -118,15 +117,15 @@
                         <div class="content-list">
                           <div class="info-item">
                             <div class="info-label">场景</div>
-                            <div class="info-text story-content">{{ sceneView(scene).scene }}</div>
+                            <div class="info-text story-content">{{ getSceneDisplay(scene).scene }}</div>
                           </div>
                           <div class="info-item">
                             <div class="info-label">动作</div>
-                            <div class="info-text story-content">{{ sceneView(scene).characterAction }}</div>
+                            <div class="info-text story-content">{{ getSceneDisplay(scene).characterAction }}</div>
                           </div>
                           <div class="info-item">
                             <div class="info-label">台词</div>
-                            <div class="info-text story-content">{{ sceneView(scene).dialogue }}</div>
+                            <div class="info-text story-content">{{ getSceneDisplay(scene).dialogue }}</div>
                           </div>
                         </div>
                       </section>
@@ -138,20 +137,20 @@
                         <PromptBlock
                           title="图片提示词"
                           label="image"
-                          :value="sceneView(scene).visualPrompt"
-                          @copy="copyText(sceneView(scene).visualPrompt, '图片提示词已复制')"
+                          :value="getSceneDisplay(scene).visualPrompt"
+                          @copy="copyText(getSceneDisplay(scene).visualPrompt, '图片提示词已复制')"
                         />
                         <PromptBlock
                           title="视频提示词"
                           label="video"
-                          :value="sceneView(scene).motionPrompt"
-                          @copy="copyText(sceneView(scene).motionPrompt, '视频提示词已复制')"
+                          :value="getSceneDisplay(scene).motionPrompt"
+                          @copy="copyText(getSceneDisplay(scene).motionPrompt, '视频提示词已复制')"
                         />
                         <PromptBlock
                           title="一致性提示词"
                           label="consistency"
-                          :value="sceneView(scene).consistencyPrompt"
-                          @copy="copyText(sceneView(scene).consistencyPrompt, '一致性提示词已复制')"
+                          :value="getSceneDisplay(scene).consistencyPrompt"
+                          @copy="copyText(getSceneDisplay(scene).consistencyPrompt, '一致性提示词已复制')"
                         />
                       </section>
                     </div>
@@ -182,8 +181,11 @@ import type {
   StoryboardGenerateResult,
   StoryboardHistoryItem,
   StoryboardScene,
-  StoryboardSceneBilingualFields,
+  StoryboardSceneDisplay,
+  StoryboardSceneText,
 } from '../types/storyboard'
+
+const EMPTY_TEXT = '暂无内容'
 
 const form = reactive<StoryboardGenerateRequest>({
   title: '婚礼反击名场面',
@@ -201,10 +203,12 @@ const router = useRouter()
 const pipeline = usePipelineStore()
 
 const styleOptions = ['写实电影感', '国风漫剧', '赛博朋克', '日漫风', '欧美漫画'].map((item) => ({ label: item, value: item }))
-const statusOptions = ['待生成', '已生成', '待优化'].map((item) => ({ label: item, value: item }))
 
 const hasBilingualScenes = computed(() => Boolean(result.value?.scenes.some((scene) => scene.bilingual)))
-const targetLanguage = computed(() => result.value?.scenes.find((scene) => scene.bilingual)?.bilingual?.target.language || '目标语言')
+const targetLanguage = computed(() => {
+  const target = result.value?.scenes.find((scene) => scene.bilingual)?.bilingual?.target
+  return typeof target === 'object' ? target.language || '目标语言' : '目标语言'
+})
 
 const PromptBlock = defineComponent({
   props: {
@@ -216,27 +220,67 @@ const PromptBlock = defineComponent({
   setup(props, { emit }) {
     return () =>
       h('div', { class: 'prompt-box' }, [
-        h('div', { class: 'prompt-toolbar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '8px' } }, [
-          h('div', { class: 'prompt-title', style: { display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0', flex: '1', whiteSpace: 'nowrap' } }, [
-            h(NTag, { size: 'small', type: 'info', bordered: false }, { default: () => props.label }),
-            h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, props.title),
-          ]),
-          h(NButton, { size: 'small', secondary: true, style: { flexShrink: '0' }, onClick: () => emit('copy') }, { default: () => '复制' }),
+        h('div', { class: 'prompt-toolbar' }, [
+          // 提示词工具栏必须保持一行：类型标签、中文标题、复制按钮横向排列。
+          h(
+            NTag,
+            { class: 'prompt-kind', size: 'small', type: 'info', bordered: false, style: { marginRight: '10px' } },
+            { default: () => props.label },
+          ),
+          h('span', { class: 'prompt-name', style: { marginRight: '14px' } }, props.title),
+          h(
+            NButton,
+            { class: 'prompt-copy', size: 'small', secondary: true, style: { marginLeft: '4px' }, onClick: () => emit('copy') },
+            { default: () => '复制' },
+          ),
         ]),
-        h('pre', { class: 'prompt-code story-content' }, props.value),
+        h('pre', { class: 'prompt-code story-content' }, props.value || EMPTY_TEXT),
       ])
   },
 })
 
-function sceneView(scene: StoryboardScene): StoryboardSceneBilingualFields {
-  // 旧分镜没有 bilingual 时直接展示顶层字段，避免历史记录报错。
-  if (!scene.bilingual) return scene
-  return displayLanguage.value === 'target' ? scene.bilingual.target : scene.bilingual.zh
+function readText(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value : EMPTY_TEXT
+}
+
+function readMaybeText(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value : ''
+}
+
+function normalizeSceneDisplay(scene: StoryboardScene, lang: 'zh' | 'target'): StoryboardSceneDisplay {
+  // 新接口把实际内容放在 bilingual.zh / bilingual.target，旧历史数据则仍在顶层字段。
+  const bilingualValue = lang === 'zh' ? scene.bilingual?.zh : scene.bilingual?.target
+  const bilingualObject: StoryboardSceneText = typeof bilingualValue === 'object' && bilingualValue !== null ? bilingualValue : {}
+  const bilingualSceneText = typeof bilingualValue === 'string' ? bilingualValue : ''
+
+  // 字段读取优先级：当前语言 bilingual 对象 > bilingual 字符串作为场景描述 > 旧顶层字段 > 兜底文案。
+  const sceneNo = scene.sceneNo ?? scene.sceneNumber ?? 0
+  const title = readText(bilingualObject.title ?? scene.title ?? (sceneNo ? `分镜 ${sceneNo}` : '分镜'))
+  const sceneText = readText(bilingualObject.scene ?? bilingualSceneText ?? scene.scene)
+
+  return {
+    sceneNo,
+    title,
+    scene: sceneText,
+    characterAction: readText(bilingualObject.characterAction ?? scene.characterAction),
+    dialogue: readText(bilingualObject.dialogue ?? scene.dialogue),
+    emotion: readText(bilingualObject.emotion ?? scene.emotion),
+    visualPrompt: readText(bilingualObject.visualPrompt ?? scene.visualPrompt),
+    motionPrompt: readText(bilingualObject.motionPrompt ?? scene.motionPrompt),
+    consistencyPrompt: readText(bilingualObject.consistencyPrompt ?? scene.consistencyPrompt),
+    duration: readText(scene.duration),
+    status: readMaybeText(scene.status) || '待生成',
+  }
+}
+
+function getSceneDisplay(scene: StoryboardScene): StoryboardSceneDisplay {
+  // 模板统一调用该方法，确保生成结果和历史记录都走同一套兼容逻辑。
+  return normalizeSceneDisplay(scene, displayLanguage.value)
 }
 
 function statusType(status: string) {
-  if (status === '已生成' || status.includes('已生成')) return 'success'
-  if (status === '待优化' || status.includes('优化')) return 'warning'
+  if (status.includes('已生成')) return 'success'
+  if (status.includes('优化')) return 'warning'
   return 'default'
 }
 
@@ -255,7 +299,7 @@ function selectHistory(item: StoryboardHistoryItem) {
 
 async function copyText(text: string, successText: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(text || EMPTY_TEXT)
     message.success(successText)
   } catch {
     message.error('复制失败，请手动选择文本复制')
@@ -416,12 +460,6 @@ onMounted(loadHistory)
   text-align: center;
 }
 
-.image-index {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-}
-
 .image-placeholder-title {
   font-size: 15px;
   font-weight: 800;
@@ -506,33 +544,42 @@ onMounted(loadHistory)
 .prompt-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 10px;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
-.prompt-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
+.prompt-name {
   min-width: 0;
   color: #374151;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.prompt-title span:last-child {
+  line-height: 24px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.prompt-toolbar :deep(.n-button) {
+.prompt-kind,
+.prompt-copy,
+.prompt-toolbar :deep(.n-button),
+.prompt-toolbar :deep(.n-tag) {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
-.prompt-toolbar :deep(.n-tag) {
-  flex-shrink: 0;
+.prompt-kind {
+  margin-right: 4px;
+}
+
+.prompt-name {
+  margin-right: 8px;
+}
+
+.prompt-copy {
+  margin-left: 4px;
 }
 
 .prompt-code {
@@ -549,6 +596,7 @@ onMounted(loadHistory)
 .next-step-row {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 16px;
 }
 
