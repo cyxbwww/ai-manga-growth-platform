@@ -19,7 +19,7 @@ const router = createRouter({
       component: AppLayout,
       children: [
         { path: '', redirect: '/dashboard' },
-        { path: 'dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '行业增长看板' } },
+        { path: 'dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '首页看板' } },
         { path: 'content-planning', name: 'ContentPlanning', component: ContentPlanning, meta: { title: '内容策划' } },
         { path: 'script-polish', name: 'ScriptPolish', component: ScriptPolish, meta: { title: '剧本打磨' } },
         { path: 'storyboard', name: 'Storyboard', component: Storyboard, meta: { title: 'AI分镜制作' } },

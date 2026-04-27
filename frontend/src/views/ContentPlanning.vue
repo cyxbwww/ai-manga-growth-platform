@@ -8,7 +8,7 @@
               <n-form-item label="项目名称">
                 <n-input v-model:value="form.projectName" placeholder="例如：逆袭千金的北美爆款短剧" />
               </n-form-item>
-              <n-form-item label="漫剧题材">
+              <n-form-item label="短剧题材">
                 <n-select v-model:value="form.genre" :options="genreOptions" />
               </n-form-item>
               <n-form-item label="目标市场">

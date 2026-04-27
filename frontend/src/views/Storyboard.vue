@@ -202,7 +202,7 @@ const message = useMessage()
 const router = useRouter()
 const pipeline = usePipelineStore()
 
-const styleOptions = ['写实电影感', '国风漫剧', '赛博朋克', '日漫风', '欧美漫画'].map((item) => ({ label: item, value: item }))
+const styleOptions = ['写实电影感', '国风短剧', '赛博朋克', '日漫风', '欧美漫画'].map((item) => ({ label: item, value: item }))
 
 const hasBilingualScenes = computed(() => Boolean(result.value?.scenes.some((scene) => scene.bilingual)))
 const targetLanguage = computed(() => {

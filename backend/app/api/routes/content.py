@@ -12,7 +12,7 @@ from app.services.ai_service import generate_json
 router = APIRouter(prefix="/content")
 
 SYSTEM_PROMPT = (
-    "你是一个 AI漫剧出海内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
+    "你是一个 AI短剧内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
     "你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
 )
 
@@ -35,8 +35,8 @@ class ContentPlanRequest(BaseModel):
 def build_content_plan_result(payload: ContentPlanRequest) -> dict:
     # mock 兜底也返回双语结构，保证 DeepSeek 未配置或失败时前端语言切换仍可用。
     zh = {
-        "title": f"{payload.projectName} - {payload.market}{payload.duration}漫剧策划",
-        "positioning": f"面向{payload.market}市场的{payload.genre}竖屏漫剧，默认使用中文做内部审核，再输出{payload.language}用于海外投放。",
+        "title": f"{payload.projectName} - {payload.market}{payload.duration}短剧策划",
+        "positioning": f"面向{payload.market}市场的{payload.genre}竖屏短剧，默认使用中文做内部审核，再输出{payload.language}用于海外投放。",
         "targetAudience": "18-34岁短视频用户，偏好强情绪、快反转、明确爽点和可快速理解的人物关系。",
         "coreConflict": "主角在亲密关系或身份关系中被低估，随后用隐藏资源完成反击，形成压迫到逆转的强对比。",
         "emotionHook": "用背叛、羞辱、误解或错失制造情绪压力，再用身份揭晓和主动反击释放情绪。",
@@ -79,16 +79,16 @@ def build_content_plan_result(payload: ContentPlanRequest) -> dict:
 def build_user_prompt(payload: ContentPlanRequest) -> str:
     # Prompt 明确双语 JSON 结构，避免目标语言覆盖内部审核所需中文内容。
     return f"""
-请根据以下用户输入生成 AI 漫剧出海内容策划方案。
+请根据以下用户输入生成 AI短剧内容策划方案。
 项目名称：{payload.projectName}
-漫剧题材：{payload.genre}
+短剧题材：{payload.genre}
 目标市场：{payload.market}
 目标语言：{payload.language}
 视频时长：{payload.duration}
 核心卖点：{payload.sellingPoint}
 
 要求：
-1. 适合 AI 漫剧出海，结果适合后续分镜制作和广告投放。
+1. 适合 AI短剧，结果适合后续分镜制作和广告投放。
 2. 根据目标市场做内容定位。
 3. 强调前三秒钩子、冲突、反转和情绪价值。
 4. {BILINGUAL_REQUIREMENT}

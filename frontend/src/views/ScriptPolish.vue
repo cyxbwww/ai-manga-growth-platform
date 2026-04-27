@@ -273,7 +273,7 @@ async function hydrateFromPipeline() {
     const plan = contentPlan?.result
     if (plan) {
       form.title = plan.title || form.title
-      form.script = `项目标题：${plan.title || form.title}\n故事定位：${plan.positioning || ''}\n核心冲突：${plan.coreConflict || ''}\n3秒开头：${plan.openingHook || ''}\n\n请基于以上策划生成可用于短视频漫剧的剧本草稿。`
+      form.script = `项目标题：${plan.title || form.title}\n故事定位：${plan.positioning || ''}\n核心冲突：${plan.coreConflict || ''}\n3秒开头：${plan.openingHook || ''}\n\n请基于以上策划生成可用于短视频短剧的剧本草稿。`
     }
   } catch {
     // 自动带入失败不影响页面独立使用。

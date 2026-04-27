@@ -13,7 +13,7 @@ from app.services.ai_service import generate_json
 router = APIRouter(prefix="/script")
 
 SYSTEM_PROMPT = (
-    "你是一个 AI漫剧出海内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
+    "你是一个 AI短剧内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
     "你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
 )
 
@@ -44,7 +44,7 @@ def build_script_polish_result(payload: ScriptPolishRequest) -> dict:
     zh_tips = [
         f"本次重点方向：{directions_text}。",
         "把解释性台词改为证据、动作和结果，让短视频用户更快理解冲突。",
-        "每15-20秒设置一次信息反转，保证漫剧片段具备追更动力。",
+        "每15-20秒设置一次信息反转，保证短剧片段具备追更动力。",
         "海外版本避免过度依赖亲属称谓，优先突出权利关系、背叛和选择。",
     ]
     target_polished = (
@@ -102,7 +102,7 @@ def build_script_polish_result(payload: ScriptPolishRequest) -> dict:
 def build_user_prompt(payload: ScriptPolishRequest) -> str:
     # 剧本打磨没有单独语言字段，默认要求模型给出中文审核版和英文海外表达版。
     return f"""
-请对以下 AI 漫剧剧本进行精品化打磨：
+请对以下 AI短剧剧本进行精品化打磨：
 剧本标题：{payload.title}
 原始剧本：{payload.script}
 打磨方向：{json.dumps(payload.directions, ensure_ascii=False)}

@@ -3,7 +3,7 @@
     <n-layout-sider bordered collapse-mode="width" :collapsed-width="64" :width="232">
       <div class="brand">
         <div class="brand-mark">AI</div>
-        <div class="brand-text">漫剧增长</div>
+        <div class="brand-text">AI短剧</div>
       </div>
       <n-menu :options="menuOptions" :value="activeKey" @update:value="handleMenuChange" />
     </n-layout-sider>
@@ -12,7 +12,7 @@
       <n-layout-header bordered class="app-header">
         <div>
           <div class="page-title">{{ pageTitle }}</div>
-          <div class="page-subtitle">面试展示版 · AI漫剧出海生产增长工作台</div>
+          <div class="page-subtitle">从内容策划、剧本打磨、AI分镜、多语种本地化，到素材上传、视频预览和投放分析的一体化 AI 短剧生产系统。</div>
         </div>
       </n-layout-header>
 
@@ -32,7 +32,7 @@ import { useAppStore } from '../stores/app'
 
 // 菜单数据：覆盖从内容生产、素材上传到投放分析的完整演示链路。
 const menus = [
-  { label: '行业增长看板', key: 'dashboard', path: '/dashboard' },
+  { label: '首页看板', key: 'dashboard', path: '/dashboard' },
   { label: '内容策划', key: 'content-planning', path: '/content-planning' },
   { label: '剧本打磨', key: 'script-polish', path: '/script-polish' },
   { label: 'AI分镜制作', key: 'storyboard', path: '/storyboard' },

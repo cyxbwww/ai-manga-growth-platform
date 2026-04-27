@@ -13,7 +13,7 @@ from app.services.ai_service import generate_json
 router = APIRouter(prefix="/localization")
 
 SYSTEM_PROMPT = (
-    "你是一个 AI漫剧出海内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
+    "你是一个 AI短剧内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
     "你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
 )
 
@@ -84,7 +84,7 @@ def build_localization_result(payload: LocalizationProcessRequest) -> dict:
 
 def build_user_prompt(payload: LocalizationProcessRequest) -> str:
     return f"""
-请模拟 AI 漫剧出海本地化流程：
+请模拟 AI短剧本地化流程：
 目标市场：{payload.market}
 目标语言：{payload.language}
 本地化策略：{payload.strategy}

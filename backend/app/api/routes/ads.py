@@ -13,7 +13,7 @@ from app.services.ai_service import generate_json
 router = APIRouter(prefix="/ads")
 
 SYSTEM_PROMPT = (
-    "你是一个 AI漫剧出海内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
+    "你是一个 AI短剧内容生产助手，擅长短剧内容策划、剧本打磨、分镜拆解、多语种本地化和海外广告投放素材生成。"
     "你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
 )
 
@@ -134,7 +134,7 @@ def build_user_prompt(payload: AdsGenerateRequest) -> str:
     language = target_language_for_market(payload.market)
     # 当前前端需要 copies 卡片对象数组，因此顶层 copies 保持原接口兼容，bilingual.copies 使用字符串数组。
     return f"""
-请为 AI 漫剧出海生成海外短视频广告投放素材：
+请为 AI短剧生成海外短视频广告投放素材：
 项目名称：{payload.projectName}
 目标市场：{payload.market}
 目标语言：{language}

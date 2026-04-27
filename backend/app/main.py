@@ -27,7 +27,7 @@ Base.metadata.create_all(bind=engine)
 ensure_pipeline_columns(engine)
 
 app = FastAPI(
-    title="AI漫剧出海增长平台 Demo API",
+    title="AI短剧制作平台 Demo API",
     debug=DEBUG,
 )
 

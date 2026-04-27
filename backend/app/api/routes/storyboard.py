@@ -17,7 +17,7 @@ from app.services.ai_service import generate_json
 router = APIRouter(prefix="/storyboard")
 
 SYSTEM_PROMPT = (
-    "你是一个 AI漫剧出海内容生产助手，擅长把短剧剧本拆解为可生产的分镜数据。"
+    "你是一个 AI短剧内容生产助手，擅长把短剧剧本拆解为可生产的分镜数据。"
     "你必须严格返回 JSON 对象，不要返回 Markdown，不要解释，不要代码块。"
 )
 
@@ -55,7 +55,7 @@ def build_scene(index: int, style: str, title: str) -> dict:
         "characterAction": "主角从被动沉默转为主动反击，抬眼、停顿、亮出关键证据。",
         "dialogue": "主角：今天结束的不是婚礼，是你们的谎言。",
         "emotion": ["压迫", "震惊", "反击", "反转", "释放", "悬念", "决断", "追更"][(index - 1) % 8],
-        "visualPrompt": f"{style}，竖屏漫剧分镜，第{index}幕，婚礼现场强冲突，主角冷静反击，电影级灯光，适合AI图片生成",
+        "visualPrompt": f"{style}，竖屏短剧分镜，第{index}幕，婚礼现场强冲突，主角冷静反击，电影级灯光，适合AI图片生成",
         "motionPrompt": f"镜头从对手嘲讽表情推进到主角抬眼，切到文件特写，{duration}，情绪从压迫转向反击",
         "consistencyPrompt": "保持女主黑色长发、冷静眼神、白色礼服一致；保持男主深色西装和婚礼场景一致",
     }
@@ -91,7 +91,7 @@ def build_storyboard_result(payload: StoryboardGenerateRequest) -> dict:
 
 def build_user_prompt(payload: StoryboardGenerateRequest) -> str:
     return f"""
-请把以下剧本拆解成可生产的 AI 漫剧分镜。
+请把以下剧本拆解成可生产的 AI短剧分镜。
 
 剧本标题：{payload.title}
 剧本文本：{payload.script}
