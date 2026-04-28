@@ -27,11 +27,14 @@
               <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
                 返回分集列表
               </n-button>
+              <n-alert v-if="inputHydrateTip.message" :type="inputHydrateTip.type" :bordered="false" class="input-hydrate-tip">
+                {{ inputHydrateTip.message }}
+              </n-alert>
               <n-form-item label="剧本标题">
-                <n-input v-model:value="form.title" />
+                <n-input v-model:value="form.title" @update:value="markInputTouched('title')" />
               </n-form-item>
               <n-form-item label="剧本文本">
-                <n-input v-model:value="form.script" type="textarea" :autosize="{ minRows: 8, maxRows: 14 }" />
+                <n-input v-model:value="form.script" type="textarea" :autosize="{ minRows: 8, maxRows: 14 }" @update:value="markInputTouched('script')" />
               </n-form-item>
               <n-form-item label="画面风格">
                 <n-select v-model:value="form.style" :options="styleOptions" />
@@ -196,12 +199,15 @@
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
+import { getEpisodeDetail } from '../api/episodes'
+import { getScriptPolishHistory } from '../api/script'
 import { generateStoryboard, getStoryboardHistory } from '../api/storyboard'
 import EpisodePicker from '../components/EpisodePicker.vue'
 import ProjectPicker from '../components/ProjectPicker.vue'
 import { usePipelineStore } from '../stores/pipeline'
 import type { ShortDramaEpisode } from '../types/episode'
 import type { ShortDramaProject } from '../types/project'
+import type { ScriptPolishHistoryItem } from '../types/script'
 import type {
   StoryboardGenerateRequest,
   StoryboardGenerateResult,
@@ -231,6 +237,16 @@ const pipeline = usePipelineStore()
 const selectedProjectId = ref<number | null>(null)
 const episodeId = ref<number | null>(null)
 const episodeNo = ref<number | null>(null)
+const currentProject = ref<ShortDramaProject | null>(null)
+const currentEpisode = ref<ShortDramaEpisode | null>(null)
+const touchedInputs = reactive<Record<'title' | 'script', boolean>>({
+  title: false,
+  script: false,
+})
+const inputHydrateTip = reactive<{ type: 'success' | 'info' | 'warning' | 'error', message: string }>({
+  type: 'info',
+  message: '',
+})
 
 const styleOptions = ['写实电影感', '国风短剧', '赛博朋克', '日漫风', '欧美漫画'].map((item) => ({ label: item, value: item }))
 
@@ -248,13 +264,29 @@ const targetLanguage = computed(() => {
   return typeof target === 'object' ? target.language || '目标语言' : '目标语言'
 })
 
-function handleProjectChange(_project: ShortDramaProject | null) {
+function markInputTouched(field: keyof typeof touchedInputs) {
+  touchedInputs[field] = true
+}
+
+function canHydrateInput(field: keyof typeof touchedInputs, value?: string | null) {
+  return !touchedInputs[field] || !String(value || '').trim()
+}
+
+function setInputHydrateTip(type: typeof inputHydrateTip.type, messageText: string) {
+  inputHydrateTip.type = type
+  inputHydrateTip.message = messageText
+}
+
+function handleProjectChange(project: ShortDramaProject | null) {
+  currentProject.value = project
   loadHistory()
 }
 
-function handleEpisodeChange(episode: ShortDramaEpisode | null) {
+async function handleEpisodeChange(episode: ShortDramaEpisode | null) {
   episodeId.value = episode?.id || null
   episodeNo.value = episode?.episode_no || null
+  currentEpisode.value = episode
+  if (episode) await hydrateStoryboardInput(episode)
   loadHistory()
 }
 
@@ -282,7 +314,7 @@ const PromptBlock = defineComponent({
             { default: () => '复制' },
           ),
         ]),
-        h('pre', { class: 'prompt-code story-content' }, props.value || EMPTY_TEXT),
+        h('div', { class: 'prompt-code story-content' }, props.value || EMPTY_TEXT),
       ])
   },
 })
@@ -293,6 +325,172 @@ function readText(value: unknown): string {
 
 function readMaybeText(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value : ''
+}
+
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const text = value.trim()
+  if (!text) return ''
+  if (!text.startsWith('{') && !text.startsWith('[')) return text
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+
+function readNestedText(source: unknown, paths: string[][]): string {
+  const normalized = parseMaybeJson(source)
+  for (const path of paths) {
+    let cursor: unknown = normalized
+    for (const key of path) {
+      if (!cursor || typeof cursor !== 'object') {
+        cursor = undefined
+        break
+      }
+      cursor = (cursor as Record<string, unknown>)[key]
+    }
+    if (typeof cursor === 'string' && cursor.trim()) return cursor
+  }
+  return typeof normalized === 'string' && normalized.trim() ? normalized : ''
+}
+
+function hasChineseText(text: string): boolean {
+  return /[\u4e00-\u9fff]/.test(text)
+}
+
+function readTextCandidates(source: unknown, paths: string[][]) {
+  const normalized = parseMaybeJson(source)
+  if (typeof normalized === 'string' && normalized.trim()) return [normalized]
+  const candidates: string[] = []
+  for (const path of paths) {
+    let cursor: unknown = normalized
+    for (const key of path) {
+      if (!cursor || typeof cursor !== 'object') {
+        cursor = undefined
+        break
+      }
+      cursor = (cursor as Record<string, unknown>)[key]
+    }
+    if (typeof cursor === 'string' && cursor.trim()) candidates.push(cursor)
+  }
+  return candidates
+}
+
+function pickChineseFirst(candidates: string[]) {
+  return candidates.find(hasChineseText) || candidates[0] || ''
+}
+
+function extractPolishedScript(record: ScriptPolishHistoryItem) {
+  const zhCandidates = readTextCandidates(record.result as unknown, [
+    ['bilingual', 'zh', 'polishedScript'],
+    ['bilingual', 'zh', 'optimizedScript'],
+    ['bilingual', 'zh', 'script'],
+    ['bilingual', 'zh', 'content'],
+    ['zh', 'polishedScript'],
+    ['zh', 'optimizedScript'],
+    ['zh', 'script'],
+    ['zh', 'content'],
+    ['polishedScriptZh'],
+    ['optimizedScriptZh'],
+    ['chinesePolishedScript'],
+    ['polished_script_zh'],
+  ])
+  const zhText = pickChineseFirst(zhCandidates)
+  if (zhText && hasChineseText(zhText)) return { text: zhText, usedGenericFallback: false }
+
+  const commonCandidates = [
+    ...zhCandidates,
+    ...readTextCandidates(record.result as unknown, [
+      ['polishedScript'],
+      ['optimizedScript'],
+      ['script'],
+      ['content'],
+    ]),
+    ...readTextCandidates(record as unknown, [
+      ['polished_script'],
+      ['script_text'],
+      ['original_script'],
+    ]),
+  ].filter(Boolean)
+  const commonText = pickChineseFirst(commonCandidates)
+  return { text: commonText, usedGenericFallback: Boolean(commonText && !hasChineseText(commonText)) }
+}
+
+function extractPolishTitle(record: ScriptPolishHistoryItem, episode?: ShortDramaEpisode | null) {
+  return formatEpisodeTitle(episode)
+    || readNestedText(record.result as unknown, [['bilingual', 'zh', 'title'], ['zh', 'title']])
+    || readNestedText(record as unknown, [['title'], ['script_title']])
+    || readNestedText(record.result as unknown, [['title'], ['scriptTitle']])
+    || formatEpisodeTitle(episode)
+}
+
+function formatEpisodeTitle(episode?: ShortDramaEpisode | null) {
+  if (!episode) return ''
+  const title = episode.title || ''
+  return title.startsWith(`第 ${episode.episode_no} 集`) ? title : `第 ${episode.episode_no} 集：${title}`
+}
+
+function applyStoryboardInput(title: string, script: string) {
+  const titleApplied = Boolean(title && canHydrateInput('title', form.title))
+  const scriptApplied = Boolean(script && canHydrateInput('script', form.script))
+  if (titleApplied) form.title = title
+  if (scriptApplied) form.script = script
+  return { titleApplied, scriptApplied }
+}
+
+async function loadEpisodeById(id: number) {
+  if (currentEpisode.value?.id === id) return currentEpisode.value
+  const response = await getEpisodeDetail(id)
+  if (response.code === 0) {
+    currentEpisode.value = response.data
+    episodeNo.value = response.data.episode_no
+    if (!selectedProjectId.value) selectedProjectId.value = response.data.project_id
+    return response.data
+  }
+  return null
+}
+
+async function hydrateStoryboardInput(episode?: ShortDramaEpisode | null) {
+  if (!selectedProjectId.value || !episodeId.value) return
+  if (!canHydrateInput('title', form.title) && !canHydrateInput('script', form.script)) {
+    setInputHydrateTip('warning', '当前剧本输入已手动编辑，未自动覆盖。')
+    return
+  }
+
+  try {
+    const resolvedEpisode = episode || await loadEpisodeById(episodeId.value)
+    const historyResponse = await getScriptPolishHistory({
+      project_id: selectedProjectId.value,
+      episode_id: episodeId.value,
+    })
+    const polishRecord = historyResponse.code === 0 ? historyResponse.data[0] : undefined
+    if (polishRecord) {
+      const polishedScript = extractPolishedScript(polishRecord)
+      const applied = applyStoryboardInput(extractPolishTitle(polishRecord, resolvedEpisode), polishedScript.text)
+      if (polishRecord.recordId || polishRecord.id) pipeline.setScriptPolishId(polishRecord.recordId || polishRecord.id)
+      if (!applied.titleApplied && !applied.scriptApplied) {
+        setInputHydrateTip('warning', '当前剧本输入已手动编辑，未自动覆盖。')
+      } else if (polishedScript.usedGenericFallback) {
+        setInputHydrateTip('warning', '未找到中文剧本版本，已使用通用剧本字段，请确认是否需要手动调整。')
+      } else {
+        setInputHydrateTip('success', '已引用最近一次分集级剧本打磨结果。')
+      }
+      return
+    }
+
+    if (resolvedEpisode) {
+      const applied = applyStoryboardInput(formatEpisodeTitle(resolvedEpisode), resolvedEpisode.summary || '')
+      setInputHydrateTip(applied.titleApplied || applied.scriptApplied ? 'info' : 'warning', applied.titleApplied || applied.scriptApplied ? '未找到剧本打磨记录，已使用分集大纲作为分镜输入。' : '当前剧本输入已手动编辑，未自动覆盖。')
+      return
+    }
+
+    const projectDescription = currentProject.value?.description || ''
+    const applied = applyStoryboardInput(currentProject.value?.name || '', projectDescription)
+    setInputHydrateTip(applied.titleApplied || applied.scriptApplied ? 'info' : 'warning', applied.titleApplied || applied.scriptApplied ? '未找到分集详情，已使用项目简介作为分镜输入。' : '当前剧本输入已手动编辑，未自动覆盖。')
+  } catch {
+    setInputHydrateTip('error', '分镜输入回填失败，请手动填写。')
+  }
 }
 
 function normalizeSceneDisplay(scene: StoryboardScene, lang: 'zh' | 'target'): StoryboardSceneDisplay {
@@ -424,6 +622,7 @@ onMounted(async () => {
   // 从项目详情页或分集列表进入时，ProjectPicker 会根据 projectId 加载并回显项目详情。
   const queryProjectId = Number(route.query.projectId)
   if (queryProjectId) selectedProjectId.value = queryProjectId
+  if (selectedProjectId.value && episodeId.value) await hydrateStoryboardInput()
   await loadHistory()
 })
 </script>
@@ -435,6 +634,10 @@ onMounted(async () => {
 
 .result-card {
   min-height: 720px;
+}
+
+.input-hydrate-tip {
+  margin-bottom: 14px;
 }
 
 .result-card :deep(.n-grid-item) {
@@ -644,14 +847,8 @@ onMounted(async () => {
   margin-bottom: 0;
 }
 
-.prompt-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  gap: 10px;
+:deep(.prompt-toolbar) {
   margin-bottom: 8px;
-  min-width: 0;
 }
 
 .prompt-name {
