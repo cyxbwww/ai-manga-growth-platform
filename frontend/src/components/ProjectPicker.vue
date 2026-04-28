@@ -100,7 +100,7 @@ const selectedProject = ref<ShortDramaProject | null>(null)
 
 const filters = reactive({
   keyword: '',
-  genre: '',
+  genre: undefined,
   stage: undefined as ShortDramaProjectStage | undefined,
   status: undefined as ShortDramaProjectStatus | undefined,
 })
@@ -173,7 +173,7 @@ async function loadSelectedProject(id: number) {
 
 function resetFilters() {
   filters.keyword = ''
-  filters.genre = ''
+  filters.genre = undefined
   filters.stage = undefined
   filters.status = undefined
   loadProjects()
@@ -304,5 +304,9 @@ onMounted(async () => {
 
 :global(.n-data-table) {
   min-height: 360px;
+}
+
+:global(.n-empty) {
+  padding: 64px 0;
 }
 </style>

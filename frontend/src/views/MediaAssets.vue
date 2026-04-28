@@ -62,7 +62,11 @@
             <n-button size="small" secondary @click="loadAssets">刷新</n-button>
           </template>
 
-          <n-data-table :columns="columns" :data="assets" :bordered="false" :single-line="false" />
+          <n-data-table :columns="columns" :data="assets" :bordered="false" :single-line="false" :loading="loading">
+            <template #empty>
+              <n-empty v-if="!loading && !assets.length" description="无数据" />
+            </template>
+          </n-data-table>
 
           <n-card v-if="previewAsset" size="small" class="preview-card" :title="previewAsset.originalFilename">
             <n-alert v-if="previewAsset.provider === 'mock'" type="warning" :bordered="false" class="preview-alert">
@@ -103,6 +107,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const assets = ref<MediaAsset[]>([])
 const previewAsset = ref<MediaAsset | null>(null)
+const loading = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadStatusText = ref('等待选择文件')
@@ -270,15 +275,22 @@ async function handleUpload() {
 }
 
 async function loadAssets() {
-  const response = await getMediaAssets({
+  loading.value = true
+  try {
+    const response = await getMediaAssets({
     project_id: selectedProjectId.value || undefined,
     episode_id: episodeId.value || undefined,
     episode_no: episodeNo.value || undefined,
   })
-  if (response.code === 0) {
-    assets.value = response.data
-    if (!previewAsset.value && response.data.length) previewAsset.value = response.data[0]
-    if (previewAsset.value && selectedProjectId.value && previewAsset.value.project_id !== selectedProjectId.value) previewAsset.value = response.data[0] || null
+    if (response.code === 0) {
+      assets.value = response.data
+      if (!previewAsset.value && response.data.length) previewAsset.value = response.data[0]
+      if (previewAsset.value && selectedProjectId.value && previewAsset.value.project_id !== selectedProjectId.value) previewAsset.value = response.data[0] || null
+    }
+  } catch {
+    message.error('短剧项目列表加载失败')
+  } finally {
+    loading.value = false
   }
 }
 

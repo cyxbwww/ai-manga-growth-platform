@@ -189,15 +189,15 @@ const total = ref(0)
 // 筛选条件独立维护，避免影响新建/编辑表单。
 const filters = reactive({
   keyword: '',
-  genre: '',
+  genre: undefined,
   stage: undefined as ShortDramaProjectStage | undefined,
   status: undefined as ShortDramaProjectStatus | undefined,
 })
 
 const defaultForm: ShortDramaProjectCreate = {
   name: '',
-  genre: '',
-  target_market: '',
+  genre: undefined,
+  target_market: undefined,
   language: 'zh-CN',
   episode_count: 60,
   stage: 'planning',
@@ -322,7 +322,7 @@ async function loadProjects() {
 
 function resetFilters() {
   filters.keyword = ''
-  filters.genre = ''
+  filters.genre = undefined
   filters.stage = undefined
   filters.status = undefined
   loadProjects()
@@ -356,7 +356,7 @@ function openEditModal(row: ShortDramaProject) {
 }
 
 async function submitProject() {
-  if (!form.name.trim() || !form.genre.trim() || !form.target_market.trim() || !form.language.trim()) {
+  if (!form.name.trim() || !form.genre?.trim() || !form.target_market?.trim() || !form.language.trim()) {
     message.warning('请填写项目名称、题材类型、目标市场和主语言')
     return
   }

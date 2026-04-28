@@ -609,7 +609,7 @@ onMounted(async () => {
 }
 
 .project-back-btn {
-  margin: -6px 0 14px;
+  margin: -6px 8px 14px 0;
 }
 
 .episode-context-card {

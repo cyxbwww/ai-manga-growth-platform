@@ -39,8 +39,11 @@
           </n-grid-item>
         </n-grid>
 
-        <n-data-table :columns="columns" :data="filteredRows" :loading="loading" :bordered="false" :single-line="false" />
-        <n-empty v-if="!loading && !filteredRows.length" description="当前暂无分镜任务，生成后的分镜会沉淀到这里。" />
+        <n-data-table :columns="columns" :data="filteredRows" :loading="loading" :bordered="false" :single-line="false">
+          <template #empty>
+            <n-empty v-if="!loading && !filteredRows.length" description="当前暂无分镜任务，生成后的分镜会沉淀到这里。" />
+          </template>
+        </n-data-table>
       </n-space>
     </n-card>
 

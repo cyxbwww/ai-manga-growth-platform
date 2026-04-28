@@ -11,8 +11,8 @@ export type ShortDramaProjectPriority = 'high' | 'medium' | 'low'
 export type ShortDramaProject = {
   id: number
   name: string
-  genre: string
-  target_market: string
+  genre: string | undefined
+  target_market: string | undefined
   language: string
   episode_count: number
   stage: ShortDramaProjectStage
@@ -26,8 +26,8 @@ export type ShortDramaProject = {
 
 export type ShortDramaProjectCreate = {
   name: string
-  genre: string
-  target_market: string
+  genre: string | undefined
+  target_market: string | undefined
   language: string
   episode_count: number
   stage: ShortDramaProjectStage
@@ -41,7 +41,7 @@ export type ShortDramaProjectUpdate = Partial<ShortDramaProjectCreate>
 
 export type ShortDramaProjectListParams = {
   keyword?: string
-  genre?: string
+  genre?: string | undefined
   stage?: ShortDramaProjectStage | undefined
   status?: ShortDramaProjectStatus | undefined
   skip?: number

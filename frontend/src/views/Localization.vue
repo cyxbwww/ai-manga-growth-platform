@@ -1,28 +1,32 @@
 <template>
   <div class="module-page">
     <n-card title="本地化配置" :bordered="false" class="config-card">
-      <div class="project-bind-row">
-        <n-form-item label="所属短剧项目" class="project-select">
-          <ProjectPicker
-            v-model="selectedProjectId"
-            placeholder="建议选择短剧项目，方便沉淀到完整生产链路"
-            @change="handleProjectChange"
-          />
-        </n-form-item>
-        <n-form-item label="所属分集" class="project-select">
-          <EpisodePicker
-            v-model="episodeId"
-            :project-id="selectedProjectId"
-            :episode-no="episodeNo"
-            placeholder="请选择要本地化的具体分集"
-            @change="handleEpisodeChange"
-          />
-        </n-form-item>
-        <n-button v-if="selectedProjectId" secondary @click="router.push(`/projects/${selectedProjectId}`)">返回项目详情</n-button>
+      <div class="config-card-content">
+        <div v-if="selectedProjectId">
+          <n-button secondary @click="router.push(`/projects/${selectedProjectId}`)">返回项目详情</n-button>
+          <n-button secondary class="episode-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+            返回分集列表
+          </n-button>
+        </div>
+        <div class="project-bind-row">
+          <n-form-item label="所属短剧项目" class="project-select">
+            <ProjectPicker
+              v-model="selectedProjectId"
+              placeholder="建议选择短剧项目，方便沉淀到完整生产链路"
+              @change="handleProjectChange"
+            />
+          </n-form-item>
+          <n-form-item label="所属分集" class="project-select">
+            <EpisodePicker
+              v-model="episodeId"
+              :project-id="selectedProjectId"
+              :episode-no="episodeNo"
+              placeholder="请选择要本地化的具体分集"
+              @change="handleEpisodeChange"
+            />
+          </n-form-item>
+        </div>
       </div>
-      <n-button v-if="selectedProjectId" size="small" secondary class="episode-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
-        返回分集列表
-      </n-button>
       <n-grid :cols="24" :x-gap="14" :y-gap="14" responsive="screen">
         <n-grid-item :span="5" :s-span="24">
           <n-form-item label="目标市场">
@@ -296,11 +300,25 @@ onMounted(async () => {
   min-height: calc(100vh - 120px);
 }
 
+.config-card-content {
+  position: relative;
+}
+
+.config-card-content > div:not(.project-bind-row) {
+  position: absolute;
+  top: -48px;
+  right: 0;
+}
+
 .project-bind-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+:global(.episode-picker) {
+  height: 100%;
 }
 
 .project-select {
@@ -383,5 +401,9 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.episode-back-btn {
+  margin-left: 8px;
 }
 </style>

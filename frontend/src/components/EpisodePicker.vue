@@ -22,7 +22,7 @@
       </n-space>
     </div>
 
-    <n-modal v-model:show="showModal" preset="card" title="选择短剧分集" class="episode-picker-modal" :style="{ width: '900px' }">
+    <n-modal v-model:show="showModal" preset="card" title="选择短剧分集" class="episode-picker-modal" :style="{ width: '1400px' }">
       <!-- EpisodePicker 用于分集级生产页选择具体集数，避免生成结果无法归属到具体 Episode。 -->
       <n-space vertical size="medium">
         <n-card size="small" :bordered="false" class="filter-card">
@@ -325,7 +325,15 @@ watch(
   background: #f8fafc;
 }
 
-:global(.episode-picker-modal .n-card__content) {
+:global(.project-picker-modal .n-card__content) {
   padding-top: 10px;
+}
+
+:global(.n-data-table) {
+  min-height: 360px;
+}
+
+:global(.n-empty) {
+  padding: 64px 0;
 }
 </style>

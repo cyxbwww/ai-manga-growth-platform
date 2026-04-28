@@ -220,7 +220,6 @@ function handleMenuChange(key: string) {
 
 .side-menu :deep(.n-menu-item-content--selected) {
   color: #0f9f5f;
-  background: #e9f8f0;
   font-weight: 800;
 }
 
@@ -230,7 +229,6 @@ function handleMenuChange(key: string) {
 
 .side-menu :deep(.n-submenu .n-menu-item-content-header) {
   color: #374151;
-  font-weight: 700;
 }
 
 .side-menu :deep(.n-menu .n-menu-item-content) {
