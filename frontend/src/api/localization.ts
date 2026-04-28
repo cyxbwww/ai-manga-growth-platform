@@ -12,6 +12,6 @@ export function processLocalization(payload: LocalizationProcessRequest) {
 }
 
 // 获取最近 20 条本地化历史记录。
-export function getLocalizationHistory() {
-  return request.get<unknown, ApiResponse<LocalizationHistoryItem[]>>('/localization/list')
+export function getLocalizationHistory(params: { project_id?: number | null; episode_id?: number | null; episode_no?: number | null } = {}) {
+  return request.get<unknown, ApiResponse<LocalizationHistoryItem[]>>('/localization/list', { params })
 }

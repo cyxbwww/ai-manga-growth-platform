@@ -3,6 +3,10 @@ export type LocalizationProcessRequest = {
   market: string
   language: string
   strategy: string
+  // project_id 用于把本地化结果归属到短剧项目；可为空以兼容独立使用。
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   contentPlanId?: number | null
   scriptPolishId?: number | null
   storyboardId?: number | null
@@ -31,6 +35,9 @@ export type LocalizationWorkflowItem = {
 // 本地化处理结果：recordId 是当前持久化记录 ID。
 export type LocalizationProcessResult = {
   recordId?: number
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   market: string
   language: string
   strategy: string

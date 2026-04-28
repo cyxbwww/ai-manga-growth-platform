@@ -4,14 +4,24 @@
       <n-grid-item :span="8" :s-span="24">
         <n-space vertical size="large">
           <n-card title="剧本输入" :bordered="false">
-            <n-alert v-if="pipeline.contentPlanId" type="success" :bordered="false" class="pipeline-tip">
-              已绑定内容策划 ID：{{ pipeline.contentPlanId }}，生成时会写入完整生产链路。
+            <!-- 项目级定位说明：弱化旧 contentPlanId 链路，强调整部短剧的规划打磨能力。 -->
+            <n-alert type="info" :bordered="false" class="pipeline-tip">
+              当前为项目级剧本打磨，可基于内容策划结果优化整部短剧的大纲、人物关系、核心冲突、节奏和前三秒钩子。分集级剧本处理建议从分集管理进入。
             </n-alert>
-            <n-alert v-else type="info" :bordered="false" class="pipeline-tip">
-              当前页面可独立使用，也可从内容策划进入以自动带入标题和剧本草稿。
+            <n-alert v-if="selectedProjectId" type="success" :bordered="false" class="pipeline-tip">
+              当前结果将归属到所选短剧项目。
+            </n-alert>
+            <n-alert v-else type="warning" :bordered="false" class="pipeline-tip">
+              建议选择短剧项目，方便沉淀到项目级规划链路。
             </n-alert>
 
             <n-form :model="form" label-placement="top">
+              <n-form-item label="所属短剧项目">
+                <ProjectPicker v-model="selectedProjectId" placeholder="建议选择短剧项目，方便沉淀到项目级规划链路" />
+              </n-form-item>
+              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+                返回项目详情
+              </n-button>
               <n-form-item label="剧本标题">
                 <n-input v-model:value="form.title" placeholder="例如：她在婚礼当天醒悟" />
               </n-form-item>
@@ -50,7 +60,7 @@
 
       <n-grid-item :span="16" :s-span="24">
         <n-spin :show="loading">
-          <n-card title="AI编剧打磨工作台" :bordered="false" class="result-card">
+          <n-card title="项目级剧本打磨工作台" :bordered="false" class="result-card">
             <template #header-extra>
               <n-space align="center">
                 <n-radio-group v-if="result?.bilingual" v-model:value="displayLanguage" size="small">
@@ -161,10 +171,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getPipelineDetail } from '../api/pipeline'
 import { getScriptPolishHistory, polishScript } from '../api/script'
+import ProjectPicker from '../components/ProjectPicker.vue'
 import { usePipelineStore } from '../stores/pipeline'
 import type { ScriptPolishBilingualFields, ScriptPolishHistoryItem, ScriptPolishRequest, ScriptPolishResult } from '../types/script'
 
@@ -179,8 +190,10 @@ const result = ref<ScriptPolishResult | null>(null)
 const history = ref<ScriptPolishHistoryItem[]>([])
 const displayLanguage = ref<'zh' | 'target'>('zh')
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const pipeline = usePipelineStore()
+const selectedProjectId = ref<number | null>(null)
 
 const scriptView = computed<ScriptPolishBilingualFields>(() => {
   // 旧历史数据没有 bilingual 时，继续使用顶层中文字段展示。
@@ -285,16 +298,19 @@ async function handlePolish() {
     message.warning('请填写剧本标题和原始剧本文本')
     return
   }
+  if (!selectedProjectId.value) {
+    message.warning('建议选择短剧项目，方便沉淀到项目级规划链路。')
+  }
 
   loading.value = true
   try {
-    const response = await polishScript({ ...form, contentPlanId: pipeline.contentPlanId })
+    const response = await polishScript({ ...form, project_id: selectedProjectId.value, contentPlanId: pipeline.contentPlanId })
     if (response.code === 0) {
       result.value = response.data
       if (response.data.recordId) pipeline.setScriptPolishId(response.data.recordId)
       displayLanguage.value = 'zh'
       await loadHistory()
-      message.success('剧本打磨完成并保存')
+      message.success(selectedProjectId.value ? '项目级剧本打磨结果已归属到当前短剧项目。' : '项目级剧本打磨完成并保存')
     }
   } catch {
     message.error('剧本打磨失败，请确认后端服务已启动')
@@ -304,6 +320,9 @@ async function handlePolish() {
 }
 
 onMounted(async () => {
+  // 从项目详情页进入时，先写入 projectId，ProjectPicker 会负责加载并回显项目信息。
+  const queryProjectId = Number(route.query.projectId)
+  if (queryProjectId) selectedProjectId.value = queryProjectId
   await Promise.all([loadHistory(), hydrateFromPipeline()])
 })
 </script>
@@ -315,6 +334,10 @@ onMounted(async () => {
 
 .pipeline-tip {
   margin-bottom: 14px;
+}
+
+.project-back-btn {
+  margin: -6px 0 14px;
 }
 
 .result-card {

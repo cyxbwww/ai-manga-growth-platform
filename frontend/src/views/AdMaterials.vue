@@ -12,8 +12,42 @@
             </n-alert>
 
             <n-form :model="form" label-placement="top">
+              <n-form-item label="所属短剧项目">
+                <ProjectPicker
+                  v-model="selectedProjectId"
+                  placeholder="建议选择短剧项目，方便沉淀到完整生产链路"
+                  @change="handleProjectChange"
+                />
+              </n-form-item>
+              <n-form-item label="所属分集（可选）">
+                <EpisodePicker
+                  v-model="episodeId"
+                  :project-id="selectedProjectId"
+                  :episode-no="episodeNo"
+                  placeholder="可选择某一集生成分集级广告素材"
+                  @change="handleEpisodeChange"
+                />
+              </n-form-item>
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+                返回项目详情
+              </n-button>
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+                返回分集列表
+              </n-button>
+              <n-alert type="info" :bordered="false" class="pipeline-tip">
+                未选择分集时，素材将作为项目级广告素材保存；选择分集后可围绕单集爆点生成投放素材。
+              </n-alert>
               <n-form-item label="项目名称"><n-input v-model:value="form.projectName" /></n-form-item>
-              <n-form-item label="目标市场"><n-select v-model:value="form.market" :options="marketOptions" /></n-form-item>
+              <n-form-item label="目标市场">
+                <n-select
+                  v-model:value="form.market"
+                  filterable
+                  label-field="label"
+                  value-field="value"
+                  placeholder="请选择目标市场"
+                  :options="dictionaries.markets"
+                />
+              </n-form-item>
               <n-form-item label="投放平台"><n-select v-model:value="form.platform" :options="platformOptions" /></n-form-item>
               <n-form-item label="内容类型"><n-select v-model:value="form.contentType" :options="contentTypeOptions" /></n-form-item>
               <n-button type="primary" block size="large" :loading="loading" @click="handleGenerate">生成广告素材</n-button>
@@ -105,13 +139,22 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { generateAds, getAdMaterialHistory } from '../api/ads'
 import { getPipelineDetail } from '../api/pipeline'
+import EpisodePicker from '../components/EpisodePicker.vue'
+import ProjectPicker from '../components/ProjectPicker.vue'
+import { useDictionaries } from '../composables/useDictionaries'
 import { usePipelineStore } from '../stores/pipeline'
 import type { AdCopyItem, AdMaterialHistoryItem, AdsBilingualFields, AdsGenerateRequest, AdsGenerateResult } from '../types/ads'
+import type { ShortDramaEpisode } from '../types/episode'
+import type { ShortDramaProject } from '../types/project'
 
+const route = useRoute()
+const router = useRouter()
 const pipeline = usePipelineStore()
+const { dictionaries, loadDictionaries } = useDictionaries()
 const form = reactive<AdsGenerateRequest>({
   projectName: '逆袭千金海外版',
   market: '北美',
@@ -123,13 +166,25 @@ const loading = ref(false)
 const result = ref<AdsGenerateResult | null>(null)
 const history = ref<AdMaterialHistoryItem[]>([])
 const displayLanguage = ref<'zh' | 'target'>('zh')
+const selectedProjectId = ref<number | null>(null)
+const episodeId = ref<number | null>(null)
+const episodeNo = ref<number | null>(null)
 const message = useMessage()
 
-const marketOptions = ['北美', '东南亚', '日本', '韩国', '中东'].map((item) => ({ label: item, value: item }))
 const platformOptions = ['TikTok', 'Instagram Reels', 'YouTube Shorts'].map((item) => ({ label: item, value: item }))
 const contentTypeOptions = ['情感反转', '爽文逆袭', '悬疑钩子', '家庭冲突'].map((item) => ({ label: item, value: item }))
 
 const hasPipelineContext = computed(() => Boolean(pipeline.contentPlanId || pipeline.scriptPolishId || pipeline.storyboardId || pipeline.localizationId))
+
+function handleProjectChange(_project: ShortDramaProject | null) {
+  loadHistory()
+}
+
+function handleEpisodeChange(episode: ShortDramaEpisode | null) {
+  episodeId.value = episode?.id || null
+  episodeNo.value = episode?.episode_no || null
+  loadHistory()
+}
 
 const adView = computed<AdsBilingualFields>(() => {
   // 兼容旧历史数据：没有 bilingual 时继续展示顶层字段。
@@ -170,6 +225,7 @@ function selectHistory(item: AdMaterialHistoryItem) {
   if (item.storyboardId) pipeline.setStoryboardId(item.storyboardId)
   if (item.localizationId) pipeline.setLocalizationId(item.localizationId)
   pipeline.setAdMaterialId(item.recordId || item.id)
+  if (item.project_id) selectedProjectId.value = item.project_id
   message.success('已加载历史广告素材')
 }
 
@@ -190,8 +246,20 @@ function markRecommended(id: number) {
 }
 
 async function loadHistory() {
-  const response = await getAdMaterialHistory()
+  const response = await getAdMaterialHistory({
+    project_id: selectedProjectId.value || undefined,
+    episode_id: episodeId.value || undefined,
+    episode_no: episodeNo.value || undefined,
+  })
   if (response.code === 0) history.value = response.data
+}
+
+function loadEpisodeQuery() {
+  // 广告素材可选绑定分集；没有 episode 参数时仍作为项目级素材生成。
+  const queryEpisodeId = Number(route.query.episodeId)
+  const queryEpisodeNo = Number(route.query.episodeNo)
+  episodeId.value = queryEpisodeId || null
+  episodeNo.value = queryEpisodeNo || null
 }
 
 async function hydrateFromPipeline() {
@@ -215,10 +283,19 @@ async function handleGenerate() {
     message.warning('请填写项目名称')
     return
   }
+  if (!selectedProjectId.value) {
+    message.warning('建议选择短剧项目，方便沉淀到完整生产链路。')
+  }
+  if (!episodeId.value) {
+    message.warning('未选择分集，本次将作为项目级广告素材保存。')
+  }
   loading.value = true
   try {
     const response = await generateAds({
       ...form,
+      project_id: selectedProjectId.value,
+      episode_id: episodeId.value,
+      episode_no: episodeNo.value,
       contentPlanId: pipeline.contentPlanId,
       scriptPolishId: pipeline.scriptPolishId,
       storyboardId: pipeline.storyboardId,
@@ -229,7 +306,7 @@ async function handleGenerate() {
       displayLanguage.value = 'zh'
       if (response.data.recordId) pipeline.setAdMaterialId(response.data.recordId)
       await loadHistory()
-      message.success('广告素材已生成并保存')
+      message.success(selectedProjectId.value ? '已生成并归属到当前短剧项目。' : '广告素材已生成并保存')
     }
   } catch {
     message.error('广告素材生成失败，请确认后端服务已启动')
@@ -239,6 +316,11 @@ async function handleGenerate() {
 }
 
 onMounted(async () => {
+  await loadDictionaries()
+  loadEpisodeQuery()
+  // 从项目详情页或分集列表进入时，ProjectPicker 会根据 projectId 加载并回显项目详情。
+  const queryProjectId = Number(route.query.projectId)
+  if (queryProjectId) selectedProjectId.value = queryProjectId
   await Promise.all([loadHistory(), hydrateFromPipeline()])
 })
 </script>
@@ -250,6 +332,29 @@ onMounted(async () => {
 
 .pipeline-tip {
   margin-bottom: 14px;
+}
+
+.project-back-btn {
+  margin-bottom: 14px;
+}
+
+.episode-context-card {
+  margin-bottom: 14px;
+  background: #f8fafc;
+}
+
+.episode-context-title {
+  color: #111827;
+  font-weight: 800;
+}
+
+.episode-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 8px 0 12px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .result-card {

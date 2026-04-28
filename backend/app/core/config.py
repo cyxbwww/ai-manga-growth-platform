@@ -7,6 +7,9 @@ API_PREFIX = os.getenv("API_PREFIX", "/api")
 # Debug 开关：字符串环境变量转为布尔值，便于本地和生产切换。
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
+# 演示数据开关：默认开启，保证面试演示删除数据库后仍能自动生成项目和分集样例。
+ENABLE_DEMO_SEED = os.getenv("ENABLE_DEMO_SEED", "true").lower() == "true"
+
 # AI Provider 配置：mock 强制走本地 mock，deepseek 优先调用真实模型。
 AI_PROVIDER = os.getenv("AI_PROVIDER", "mock").lower()
 AI_API_KEY = os.getenv("AI_API_KEY", "")

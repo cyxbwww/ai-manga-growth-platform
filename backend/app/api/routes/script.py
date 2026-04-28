@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.script_polish import ScriptPolish
 from app.services.ai_service import generate_json
+from app.services.project_flow import advance_project_stage
 
 
 router = APIRouter(prefix="/script")
@@ -25,6 +26,7 @@ BILINGUAL_REQUIREMENT = (
 
 class ScriptPolishRequest(BaseModel):
     # 剧本打磨请求：directions 为用户选择的优化方向。
+    project_id: Optional[int] = None
     title: str
     script: str
     directions: list[str]
@@ -134,6 +136,7 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
     result = generate_json(SYSTEM_PROMPT, build_user_prompt(payload), fallback_data)
 
     record = ScriptPolish(
+        project_id=payload.project_id,
         content_plan_id=payload.contentPlanId,
         title=payload.title,
         original_script=payload.script,
@@ -143,8 +146,9 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
     db.add(record)
     db.commit()
     db.refresh(record)
+    advance_project_stage(db, payload.project_id, "storyboard")
 
-    return {"code": 0, "message": "success", "data": {"recordId": record.id, **result}}
+    return {"code": 0, "message": "success", "data": {"recordId": record.id, "project_id": payload.project_id, **result}}
 
 
 @router.get("/polishes")
@@ -154,6 +158,7 @@ def get_script_polish_history(db: Session = Depends(get_db)):
         {
             "id": item.id,
             "recordId": item.id,
+            "project_id": item.project_id,
             "contentPlanId": item.content_plan_id,
             "title": item.title,
             "script": item.original_script,

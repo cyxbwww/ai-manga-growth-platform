@@ -11,20 +11,29 @@ from app.api.routes.ai import router as ai_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.content import router as content_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.dictionaries import router as dictionaries_router
+from app.api.routes.episodes import router as episodes_router
 from app.api.routes.health import router as health_router
 from app.api.routes.localization import router as localization_router
 from app.api.routes.media import router as media_router
 from app.api.routes.pipeline import router as pipeline_router
+from app.api.routes.projects import router as projects_router
 from app.api.routes.script import router as script_router
 from app.api.routes.storyboard import router as storyboard_router
-from app.core.config import API_PREFIX, DEBUG
+from app.core.config import API_PREFIX, DEBUG, ENABLE_DEMO_SEED
 from app.core.database import Base, engine
 from app.core.migrations import ensure_pipeline_columns
+from app.services.project_seed import seed_short_drama_projects
 
 
 # 自动创建表；旧 SQLite 表不会被 create_all 自动补列，因此再执行轻量字段补齐。
 Base.metadata.create_all(bind=engine)
 ensure_pipeline_columns(engine)
+if ENABLE_DEMO_SEED:
+    # 面试演示默认开启 seed；调试空库时可在 .env 中设置 ENABLE_DEMO_SEED=false。
+    seed_short_drama_projects()
+else:
+    print("ENABLE_DEMO_SEED=false，已跳过短剧项目和分集演示数据初始化。")
 
 app = FastAPI(
     title="AI短剧制作平台 Demo API",
@@ -41,7 +50,10 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix=API_PREFIX)
+app.include_router(projects_router, prefix=API_PREFIX)
+app.include_router(episodes_router, prefix=API_PREFIX)
 app.include_router(dashboard_router, prefix=API_PREFIX)
+app.include_router(dictionaries_router, prefix=API_PREFIX)
 app.include_router(content_router, prefix=API_PREFIX)
 app.include_router(script_router, prefix=API_PREFIX)
 app.include_router(storyboard_router, prefix=API_PREFIX)

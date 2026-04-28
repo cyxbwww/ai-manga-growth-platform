@@ -1,16 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '../layouts/AppLayout.vue'
 import Dashboard from '../views/Dashboard.vue'
+import ShortDramaProjects from '../views/ShortDramaProjects.vue'
+import ShortDramaProjectDetail from '../views/ShortDramaProjectDetail.vue'
+import EpisodeList from '../views/EpisodeList.vue'
 import ContentPlanning from '../views/ContentPlanning.vue'
 import ScriptPolish from '../views/ScriptPolish.vue'
 import Storyboard from '../views/Storyboard.vue'
+import StoryboardList from '../views/StoryboardList.vue'
 import Localization from '../views/Localization.vue'
+import LocalizationList from '../views/LocalizationList.vue'
 import AdMaterials from '../views/AdMaterials.vue'
+import AdMaterialList from '../views/AdMaterialList.vue'
 import MediaAssets from '../views/MediaAssets.vue'
 import GrowthAnalytics from '../views/GrowthAnalytics.vue'
 import PlaceholderPage from '../views/PlaceholderPage.vue'
 
-// 路由配置：覆盖从内容生产、素材管理到投放分析的完整演示链路。
+// 路由配置：保留原生成页，同时新增生产结果列表页用于沉淀 AI 产物。
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -20,11 +26,17 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/dashboard' },
         { path: 'dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '首页看板' } },
+        { path: 'projects', name: 'ShortDramaProjects', component: ShortDramaProjects, meta: { title: '短剧项目管理' } },
+        { path: 'projects/:id/episodes', name: 'EpisodeList', component: EpisodeList, meta: { title: '分集管理' } },
+        { path: 'projects/:id', name: 'ShortDramaProjectDetail', component: ShortDramaProjectDetail, meta: { title: '短剧项目详情' } },
         { path: 'content-planning', name: 'ContentPlanning', component: ContentPlanning, meta: { title: '内容策划' } },
         { path: 'script-polish', name: 'ScriptPolish', component: ScriptPolish, meta: { title: '剧本打磨' } },
         { path: 'storyboard', name: 'Storyboard', component: Storyboard, meta: { title: 'AI分镜制作' } },
+        { path: 'storyboards', name: 'StoryboardList', component: StoryboardList, meta: { title: '分镜任务列表' } },
         { path: 'localization', name: 'Localization', component: Localization, meta: { title: '多语种本地化' } },
+        { path: 'localizations', name: 'LocalizationList', component: LocalizationList, meta: { title: '本地化版本列表' } },
         { path: 'ad-materials', name: 'AdMaterials', component: AdMaterials, meta: { title: '海外投放素材' } },
+        { path: 'ad-materials/list', name: 'AdMaterialList', component: AdMaterialList, meta: { title: '广告素材库' } },
         { path: 'media-assets', name: 'MediaAssets', component: MediaAssets, meta: { title: '素材上传与预览' } },
         { path: 'growth-analytics', name: 'GrowthAnalytics', component: GrowthAnalytics, meta: { title: '增长分析' } },
         { path: 'ad-assets', redirect: '/ad-materials' },

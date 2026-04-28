@@ -10,6 +10,8 @@ class ScriptPolish(Base):
     __tablename__ = "script_polishes"
 
     id = Column(Integer, primary_key=True, index=True)
+    # project_id 用于把 AI 生成结果绑定到短剧项目，当前先做弱关联，后续可升级为外键约束。
+    project_id = Column(Integer, nullable=True, index=True)
     content_plan_id = Column(Integer, nullable=True)
     title = Column(String(255), nullable=False)
     original_script = Column(Text, nullable=False)

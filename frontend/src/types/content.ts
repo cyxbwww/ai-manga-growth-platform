@@ -1,5 +1,6 @@
 // 内容策划请求参数：对应后端 POST /api/content/plan。
 export type ContentPlanRequest = {
+  project_id?: number | null
   projectName: string
   genre: string
   market: string

@@ -8,6 +8,6 @@ export function generateStoryboard(payload: StoryboardGenerateRequest) {
 }
 
 // 获取最近 20 条分镜历史记录。
-export function getStoryboardHistory() {
-  return request.get<unknown, ApiResponse<StoryboardHistoryItem[]>>('/storyboard/list')
+export function getStoryboardHistory(params: { project_id?: number | null; episode_id?: number | null; episode_no?: number | null } = {}) {
+  return request.get<unknown, ApiResponse<StoryboardHistoryItem[]>>('/storyboard/list', { params })
 }

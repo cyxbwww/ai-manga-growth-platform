@@ -1,11 +1,15 @@
 from pathlib import Path
+from typing import Optional
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.media_asset import MediaAsset
+from app.models.short_drama_episode import ShortDramaEpisode
+from app.services.project_flow import advance_project_stage
 from app.services.s3_service import generate_put_presigned_url
 
 
@@ -30,11 +34,17 @@ class PresignRequest(BaseModel):
     filename: str
     mimeType: str
     size: int
+    project_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    episode_no: Optional[int] = None
 
 
 class CompleteRequest(BaseModel):
     assetId: int
     objectKey: str
+    project_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    episode_no: Optional[int] = None
 
 
 class MultipartInitRequest(BaseModel):
@@ -86,6 +96,9 @@ def validate_upload(payload: PresignRequest) -> str:
 def asset_to_dict(asset: MediaAsset) -> dict:
     return {
         "id": asset.id,
+        "project_id": asset.project_id,
+        "episode_id": asset.episode_id,
+        "episode_no": asset.episode_no,
         "filename": asset.filename,
         "originalFilename": asset.original_filename,
         "fileType": asset.file_type,
@@ -111,6 +124,9 @@ def presign_upload(payload: PresignRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"S3 签名失败：{exc}") from exc
 
     asset = MediaAsset(
+        project_id=payload.project_id,
+        episode_id=payload.episode_id,
+        episode_no=payload.episode_no,
         filename=Path(presign["objectKey"]).name,
         original_filename=payload.filename,
         file_type=file_type,
@@ -134,6 +150,9 @@ def presign_upload(payload: PresignRequest, db: Session = Depends(get_db)):
             "objectKey": presign["objectKey"],
             "publicUrl": presign["publicUrl"],
             "provider": presign["provider"],
+            "project_id": asset.project_id,
+            "episode_id": asset.episode_id,
+            "episode_no": asset.episode_no,
         },
     }
 
@@ -146,15 +165,49 @@ def complete_upload(payload: CompleteRequest, db: Session = Depends(get_db)):
     if asset.object_key != payload.objectKey:
         raise HTTPException(status_code=400, detail="objectKey 不匹配")
 
+    if payload.project_id and not asset.project_id:
+        # complete 阶段允许补写 project_id，兼容 presign 阶段未绑定项目的旧流程。
+        asset.project_id = payload.project_id
+    if payload.episode_id and not asset.episode_id:
+        # complete 阶段允许补写 episode 信息，兼容 presign 阶段未绑定分集的旧流程。
+        asset.episode_id = payload.episode_id
+    if payload.episode_no and not asset.episode_no:
+        asset.episode_no = payload.episode_no
     asset.status = "uploaded"
     db.commit()
     db.refresh(asset)
+    # 媒体上传属于素材制作资产沉淀，完成后保持项目在 material 阶段，后续广告素材生成再推进到 launch。
+    advance_project_stage(db, asset.project_id or payload.project_id, "material")
+    if asset.episode_id or payload.episode_id:
+        try:
+            episode = db.query(ShortDramaEpisode).filter(ShortDramaEpisode.id == (asset.episode_id or payload.episode_id)).first()
+            if episode:
+                # 分集级媒体资产状态流转：图片/字幕仍处于媒体制作，视频素材通常代表成片或镜头素材已具备，可推进为 completed。
+                episode.media_status = "completed"
+                episode.stage = "completed" if asset.file_type == "video" else "media"
+                episode.updated_at = datetime.now()
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"媒体上传完成后更新分集状态失败，已忽略：episode_id={asset.episode_id or payload.episode_id}, error={exc}")
     return {"code": 0, "message": "success", "data": asset_to_dict(asset)}
 
 
 @router.get("/assets")
-def list_assets(db: Session = Depends(get_db)):
-    assets = db.query(MediaAsset).order_by(MediaAsset.created_at.desc()).limit(50).all()
+def list_assets(
+    project_id: Optional[int] = Query(default=None),
+    episode_id: Optional[int] = Query(default=None),
+    episode_no: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(MediaAsset)
+    if project_id:
+        query = query.filter(MediaAsset.project_id == project_id)
+    if episode_id:
+        query = query.filter(MediaAsset.episode_id == episode_id)
+    if episode_no:
+        query = query.filter(MediaAsset.episode_no == episode_no)
+    assets = query.order_by(MediaAsset.created_at.desc()).limit(50).all()
     return {"code": 0, "message": "success", "data": [asset_to_dict(asset) for asset in assets]}
 
 

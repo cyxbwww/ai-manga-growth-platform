@@ -1,13 +1,16 @@
 import json
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.ad_material import AdMaterial
+from app.models.short_drama_episode import ShortDramaEpisode
 from app.services.ai_service import generate_json
+from app.services.project_flow import advance_project_stage
 
 
 router = APIRouter(prefix="/ads")
@@ -29,6 +32,9 @@ class AdsGenerateRequest(BaseModel):
     market: str
     platform: str
     contentType: str
+    project_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    episode_no: Optional[int] = None
     contentPlanId: Optional[int] = None
     scriptPolishId: Optional[int] = None
     storyboardId: Optional[int] = None
@@ -215,6 +221,9 @@ def generate_ads(payload: AdsGenerateRequest, db: Session = Depends(get_db)):
     result = normalize_ads_result(ai_result, fallback_data)
 
     record = AdMaterial(
+        project_id=payload.project_id,
+        episode_id=payload.episode_id,
+        episode_no=payload.episode_no,
         content_plan_id=payload.contentPlanId,
         script_polish_id=payload.scriptPolishId,
         storyboard_id=payload.storyboardId,
@@ -228,17 +237,50 @@ def generate_ads(payload: AdsGenerateRequest, db: Session = Depends(get_db)):
     db.add(record)
     db.commit()
     db.refresh(record)
+    # 广告素材生成后进入投放阶段；如果项目不存在，project_flow 会记录提示并忽略。
+    advance_project_stage(db, payload.project_id, "launch")
+    # 广告素材既可能是项目级，也可能是分集级；分集状态更新是可选增强，不影响素材生成主流程。
+    if payload.episode_id:
+        try:
+            episode = db.query(ShortDramaEpisode).filter(ShortDramaEpisode.id == payload.episode_id).first()
+            if episode:
+                if hasattr(episode, "ad_status"):
+                    setattr(episode, "ad_status", "completed")
+                episode.updated_at = datetime.now()
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"广告素材生成后更新分集状态失败，已忽略：episode_id={payload.episode_id}, error={exc}")
 
-    return {"code": 0, "message": "success", "data": {"recordId": record.id, **result}}
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {"recordId": record.id, "project_id": payload.project_id, "episode_id": payload.episode_id, "episode_no": payload.episode_no, **result},
+    }
 
 
 @router.get("/list")
-def get_ad_material_history(db: Session = Depends(get_db)):
-    records = db.query(AdMaterial).order_by(AdMaterial.created_at.desc()).limit(20).all()
+def get_ad_material_history(
+    project_id: Optional[int] = Query(default=None),
+    episode_id: Optional[int] = Query(default=None),
+    episode_no: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(AdMaterial)
+    if project_id:
+        query = query.filter(AdMaterial.project_id == project_id)
+    if episode_id:
+        query = query.filter(AdMaterial.episode_id == episode_id)
+    if episode_no:
+        query = query.filter(AdMaterial.episode_no == episode_no)
+    records = query.order_by(AdMaterial.created_at.desc()).limit(20).all()
     data = [
         {
             "id": item.id,
             "recordId": item.id,
+            "project_id": item.project_id,
+            "episode_id": item.episode_id,
+            "episode_no": item.episode_no,
             "contentPlanId": item.content_plan_id,
             "scriptPolishId": item.script_polish_id,
             "storyboardId": item.storyboard_id,

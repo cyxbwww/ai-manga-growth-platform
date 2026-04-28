@@ -10,6 +10,8 @@ class ContentPlan(Base):
     __tablename__ = "content_plans"
 
     id = Column(Integer, primary_key=True, index=True)
+    # project_id 用于把 AI 生成结果绑定到短剧项目，当前先做弱关联，后续可升级为外键约束。
+    project_id = Column(Integer, nullable=True, index=True)
     project_name = Column(String(255), nullable=False)
     genre = Column(String(100), nullable=False)
     market = Column(String(100), nullable=False)

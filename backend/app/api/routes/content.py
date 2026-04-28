@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.content_plan import ContentPlan
 from app.services.ai_service import generate_json
+from app.services.project_flow import advance_project_stage
 
 
 router = APIRouter(prefix="/content")
@@ -24,6 +25,7 @@ BILINGUAL_REQUIREMENT = (
 
 class ContentPlanRequest(BaseModel):
     # 内容策划请求：字段保持与前端和历史版本接口兼容。
+    project_id: int | None = None
     projectName: str
     genre: str
     market: str
@@ -139,6 +141,7 @@ def create_content_plan(payload: ContentPlanRequest, db: Session = Depends(get_d
 
     # 无论 DeepSeek 还是 fallback，最终结果都写入 SQLite。
     record = ContentPlan(
+        project_id=payload.project_id,
         project_name=payload.projectName,
         genre=payload.genre,
         market=payload.market,
@@ -150,8 +153,9 @@ def create_content_plan(payload: ContentPlanRequest, db: Session = Depends(get_d
     db.add(record)
     db.commit()
     db.refresh(record)
+    advance_project_stage(db, payload.project_id, "scripting")
 
-    return {"code": 0, "message": "success", "data": {"recordId": record.id, **result}}
+    return {"code": 0, "message": "success", "data": {"recordId": record.id, "project_id": payload.project_id, **result}}
 
 
 @router.get("/plans")
@@ -162,6 +166,7 @@ def get_content_plan_history(db: Session = Depends(get_db)):
         {
             "id": item.id,
             "recordId": item.id,
+            "project_id": item.project_id,
             "projectName": item.project_name,
             "genre": item.genre,
             "market": item.market,

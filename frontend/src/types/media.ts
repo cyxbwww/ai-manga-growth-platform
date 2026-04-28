@@ -3,6 +3,10 @@ export type MediaPresignRequest = {
   filename: string
   mimeType: string
   size: number
+  // project_id 用于把媒体资产归属到短剧项目；presign 阶段创建元数据时写入。
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
 }
 
 export type MediaPresignResult = {
@@ -11,15 +15,25 @@ export type MediaPresignResult = {
   objectKey: string
   publicUrl: string
   provider: 's3' | 'mock'
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
 }
 
 export type MediaCompleteRequest = {
   assetId: number
   objectKey: string
+  // complete 阶段允许补写 project_id，兼容未绑定项目的旧上传流程。
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
 }
 
 export type MediaAsset = {
   id: number
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   filename: string
   originalFilename: string
   fileType: 'video' | 'image' | 'subtitle'

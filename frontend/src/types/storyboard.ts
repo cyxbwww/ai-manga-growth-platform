@@ -1,5 +1,8 @@
 // 分镜生成请求：可携带内容策划和剧本打磨的上游链路 ID。
 export type StoryboardGenerateRequest = {
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   title: string
   script: string
   style: string
@@ -42,6 +45,9 @@ export type StoryboardSceneDisplay = Required<StoryboardSceneText> & {
 // 分镜生成结果：右侧以卡片形式展示可生产化内容。
 export type StoryboardGenerateResult = {
   recordId?: number
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   storyboardTitle: string
   style: string
   scenes: StoryboardScene[]
@@ -51,6 +57,8 @@ export type StoryboardGenerateResult = {
 export type StoryboardHistoryItem = StoryboardGenerateRequest & {
   id: number
   recordId?: number
+  episode_id?: number | null
+  episode_no?: number | null
   result: StoryboardGenerateResult
   createdAt: string
 }

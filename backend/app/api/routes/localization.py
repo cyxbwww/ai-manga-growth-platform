@@ -1,13 +1,16 @@
 import json
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.localization import Localization
+from app.models.short_drama_episode import ShortDramaEpisode
 from app.services.ai_service import generate_json
+from app.services.project_flow import advance_project_stage
 
 
 router = APIRouter(prefix="/localization")
@@ -23,6 +26,9 @@ class LocalizationProcessRequest(BaseModel):
     market: str
     language: str
     strategy: str
+    project_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    episode_no: Optional[int] = None
     contentPlanId: Optional[int] = None
     scriptPolishId: Optional[int] = None
     storyboardId: Optional[int] = None
@@ -124,6 +130,9 @@ def process_localization(payload: LocalizationProcessRequest, db: Session = Depe
     result = generate_json(SYSTEM_PROMPT, build_user_prompt(payload), fallback_data)
 
     record = Localization(
+        project_id=payload.project_id,
+        episode_id=payload.episode_id,
+        episode_no=payload.episode_no,
         content_plan_id=payload.contentPlanId,
         script_polish_id=payload.scriptPolishId,
         storyboard_id=payload.storyboardId,
@@ -135,17 +144,50 @@ def process_localization(payload: LocalizationProcessRequest, db: Session = Depe
     db.add(record)
     db.commit()
     db.refresh(record)
+    # 本地化完成后进入素材制作阶段；阶段流转失败不影响本次生成结果返回。
+    advance_project_stage(db, payload.project_id, "material")
+    # 分集级本地化生产状态流转：本地化完成后，该集进入媒体制作阶段；失败不影响本次生成结果返回。
+    if payload.episode_id:
+        try:
+            episode = db.query(ShortDramaEpisode).filter(ShortDramaEpisode.id == payload.episode_id).first()
+            if episode:
+                episode.localization_status = "completed"
+                episode.stage = "media"
+                episode.updated_at = datetime.now()
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"本地化完成后更新分集状态失败，已忽略：episode_id={payload.episode_id}, error={exc}")
 
-    return {"code": 0, "message": "success", "data": {"recordId": record.id, **result}}
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {"recordId": record.id, "project_id": payload.project_id, "episode_id": payload.episode_id, "episode_no": payload.episode_no, **result},
+    }
 
 
 @router.get("/list")
-def get_localization_history(db: Session = Depends(get_db)):
-    records = db.query(Localization).order_by(Localization.created_at.desc()).limit(20).all()
+def get_localization_history(
+    project_id: Optional[int] = Query(default=None),
+    episode_id: Optional[int] = Query(default=None),
+    episode_no: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Localization)
+    if project_id:
+        query = query.filter(Localization.project_id == project_id)
+    if episode_id:
+        query = query.filter(Localization.episode_id == episode_id)
+    if episode_no:
+        query = query.filter(Localization.episode_no == episode_no)
+    records = query.order_by(Localization.created_at.desc()).limit(20).all()
     data = [
         {
             "id": item.id,
             "recordId": item.id,
+            "project_id": item.project_id,
+            "episode_id": item.episode_id,
+            "episode_no": item.episode_no,
             "contentPlanId": item.content_plan_id,
             "scriptPolishId": item.script_polish_id,
             "storyboardId": item.storyboard_id,

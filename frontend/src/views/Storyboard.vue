@@ -5,6 +5,28 @@
         <n-space vertical size="large">
           <n-card title="剧本拆镜输入" :bordered="false">
             <n-form :model="form" label-placement="top">
+              <n-form-item label="所属短剧项目">
+                <ProjectPicker
+                  v-model="selectedProjectId"
+                  placeholder="建议选择短剧项目，方便沉淀到完整生产链路"
+                  @change="handleProjectChange"
+                />
+              </n-form-item>
+              <n-form-item label="所属分集">
+                <EpisodePicker
+                  v-model="episodeId"
+                  :project-id="selectedProjectId"
+                  :episode-no="episodeNo"
+                  placeholder="请选择要生成分镜的具体分集"
+                  @change="handleEpisodeChange"
+                />
+              </n-form-item>
+              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+                返回项目详情
+              </n-button>
+              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+                返回分集列表
+              </n-button>
               <n-form-item label="剧本标题">
                 <n-input v-model:value="form.title" />
               </n-form-item>
@@ -74,7 +96,7 @@
                     </div>
                     <n-space align="center">
                       <n-tag type="default" bordered>待上传</n-tag>
-                      <n-button size="small" secondary @click="router.push('/media-assets')">上传镜头素材</n-button>
+                      <n-button size="small" secondary @click="goWithContext('/media-assets')">上传镜头素材</n-button>
                       <n-tag :type="statusType(getSceneDisplay(scene).status)" bordered>{{ getSceneDisplay(scene).status }}</n-tag>
                     </n-space>
                   </div>
@@ -158,8 +180,8 @@
                 </article>
               </div>
               <div class="next-step-row">
-                <n-button secondary @click="router.push('/media-assets')">上传分镜素材</n-button>
-                <n-button type="primary" secondary @click="router.push('/localization')">进入多语种本地化</n-button>
+                <n-button secondary @click="goWithContext('/media-assets')">上传分镜素材</n-button>
+                <n-button type="primary" secondary @click="goWithContext('/localization')">进入多语种本地化</n-button>
               </div>
             </template>
             <n-empty v-else description="输入剧本后生成分镜，或点击历史记录查看已保存结果。" />
@@ -172,10 +194,14 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import { generateStoryboard, getStoryboardHistory } from '../api/storyboard'
+import EpisodePicker from '../components/EpisodePicker.vue'
+import ProjectPicker from '../components/ProjectPicker.vue'
 import { usePipelineStore } from '../stores/pipeline'
+import type { ShortDramaEpisode } from '../types/episode'
+import type { ShortDramaProject } from '../types/project'
 import type {
   StoryboardGenerateRequest,
   StoryboardGenerateResult,
@@ -199,16 +225,38 @@ const result = ref<StoryboardGenerateResult | null>(null)
 const history = ref<StoryboardHistoryItem[]>([])
 const displayLanguage = ref<'zh' | 'target'>('zh')
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const pipeline = usePipelineStore()
+const selectedProjectId = ref<number | null>(null)
+const episodeId = ref<number | null>(null)
+const episodeNo = ref<number | null>(null)
 
 const styleOptions = ['写实电影感', '国风短剧', '赛博朋克', '日漫风', '欧美漫画'].map((item) => ({ label: item, value: item }))
+
+function loadEpisodeQuery() {
+  // 从分集列表进入时会携带 episodeId / episodeNo，这里只做读取和展示，不影响旧的独立生成流程。
+  const queryEpisodeId = Number(route.query.episodeId)
+  const queryEpisodeNo = Number(route.query.episodeNo)
+  episodeId.value = queryEpisodeId || null
+  episodeNo.value = queryEpisodeNo || null
+}
 
 const hasBilingualScenes = computed(() => Boolean(result.value?.scenes.some((scene) => scene.bilingual)))
 const targetLanguage = computed(() => {
   const target = result.value?.scenes.find((scene) => scene.bilingual)?.bilingual?.target
   return typeof target === 'object' ? target.language || '目标语言' : '目标语言'
 })
+
+function handleProjectChange(_project: ShortDramaProject | null) {
+  loadHistory()
+}
+
+function handleEpisodeChange(episode: ShortDramaEpisode | null) {
+  episodeId.value = episode?.id || null
+  episodeNo.value = episode?.episode_no || null
+  loadHistory()
+}
 
 const PromptBlock = defineComponent({
   props: {
@@ -319,8 +367,20 @@ function exportJson() {
 }
 
 async function loadHistory() {
-  const response = await getStoryboardHistory()
+  const response = await getStoryboardHistory({
+    project_id: selectedProjectId.value || undefined,
+    episode_id: episodeId.value || undefined,
+    episode_no: episodeNo.value || undefined,
+  })
   if (response.code === 0) history.value = response.data
+}
+
+function goWithContext(path: string) {
+  const query = new URLSearchParams()
+  if (selectedProjectId.value) query.set('projectId', String(selectedProjectId.value))
+  if (episodeId.value) query.set('episodeId', String(episodeId.value))
+  if (episodeNo.value) query.set('episodeNo', String(episodeNo.value))
+  router.push(`${path}${query.toString() ? `?${query.toString()}` : ''}`)
 }
 
 async function handleGenerate() {
@@ -328,15 +388,29 @@ async function handleGenerate() {
     message.warning('请填写剧本标题和剧本文本')
     return
   }
+  if (!selectedProjectId.value) {
+    message.warning('建议选择短剧项目，方便沉淀到完整生产链路。')
+  }
+  if (!episodeId.value) {
+    message.warning('请选择具体分集，AI分镜结果需要沉淀到对应集数。')
+    return
+  }
   loading.value = true
   try {
-    const response = await generateStoryboard({ ...form, contentPlanId: pipeline.contentPlanId, scriptPolishId: pipeline.scriptPolishId })
+    const response = await generateStoryboard({
+      ...form,
+      project_id: selectedProjectId.value,
+      episode_id: episodeId.value,
+      episode_no: episodeNo.value,
+      contentPlanId: pipeline.contentPlanId,
+      scriptPolishId: pipeline.scriptPolishId,
+    })
     if (response.code === 0) {
       result.value = response.data
       if (response.data.recordId) pipeline.setStoryboardId(response.data.recordId)
       displayLanguage.value = 'zh'
       await loadHistory()
-      message.success('分镜已生成并保存')
+      message.success(selectedProjectId.value ? '已生成并归属到当前短剧项目。' : '分镜已生成并保存')
     }
   } catch {
     message.error('分镜生成失败，请确认后端服务已启动')
@@ -345,7 +419,13 @@ async function handleGenerate() {
   }
 }
 
-onMounted(loadHistory)
+onMounted(async () => {
+  loadEpisodeQuery()
+  // 从项目详情页或分集列表进入时，ProjectPicker 会根据 projectId 加载并回显项目详情。
+  const queryProjectId = Number(route.query.projectId)
+  if (queryProjectId) selectedProjectId.value = queryProjectId
+  await loadHistory()
+})
 </script>
 
 <style scoped>
@@ -526,6 +606,29 @@ onMounted(loadHistory)
   white-space: normal;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+.project-back-btn {
+  margin: -6px 0 14px;
+}
+
+.episode-context-card {
+  margin: -4px 0 14px;
+  background: #f8fafc;
+}
+
+.episode-context-title {
+  color: #111827;
+  font-weight: 800;
+}
+
+.episode-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 8px 0 12px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .prompt-box {

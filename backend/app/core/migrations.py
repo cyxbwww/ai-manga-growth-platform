@@ -18,16 +18,32 @@ def ensure_column(engine, table_name: str, column_name: str, column_sql: str) ->
 
 def ensure_pipeline_columns(engine) -> None:
     # 全链路 ID 字段均允许为空，保证旧历史数据继续可读。
+    ensure_column(engine, "content_plans", "project_id", "INTEGER")
+
+    ensure_column(engine, "script_polishes", "project_id", "INTEGER")
     ensure_column(engine, "script_polishes", "content_plan_id", "INTEGER")
 
+    ensure_column(engine, "storyboards", "project_id", "INTEGER")
+    ensure_column(engine, "storyboards", "episode_id", "INTEGER")
+    ensure_column(engine, "storyboards", "episode_no", "INTEGER")
     ensure_column(engine, "storyboards", "content_plan_id", "INTEGER")
     ensure_column(engine, "storyboards", "script_polish_id", "INTEGER")
 
+    ensure_column(engine, "localizations", "project_id", "INTEGER")
+    ensure_column(engine, "localizations", "episode_id", "INTEGER")
+    ensure_column(engine, "localizations", "episode_no", "INTEGER")
     ensure_column(engine, "localizations", "content_plan_id", "INTEGER")
     ensure_column(engine, "localizations", "script_polish_id", "INTEGER")
     ensure_column(engine, "localizations", "storyboard_id", "INTEGER")
 
+    ensure_column(engine, "ad_materials", "project_id", "INTEGER")
+    ensure_column(engine, "ad_materials", "episode_id", "INTEGER")
+    ensure_column(engine, "ad_materials", "episode_no", "INTEGER")
     ensure_column(engine, "ad_materials", "content_plan_id", "INTEGER")
     ensure_column(engine, "ad_materials", "script_polish_id", "INTEGER")
     ensure_column(engine, "ad_materials", "storyboard_id", "INTEGER")
     ensure_column(engine, "ad_materials", "localization_id", "INTEGER")
+
+    ensure_column(engine, "media_assets", "project_id", "INTEGER")
+    ensure_column(engine, "media_assets", "episode_id", "INTEGER")
+    ensure_column(engine, "media_assets", "episode_no", "INTEGER")

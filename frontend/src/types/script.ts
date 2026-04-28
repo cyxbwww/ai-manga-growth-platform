@@ -1,5 +1,6 @@
 // 剧本打磨请求参数：directions 支持多个优化方向，可携带内容策划 ID。
 export type ScriptPolishRequest = {
+  project_id?: number | null
   title: string
   script: string
   directions: string[]

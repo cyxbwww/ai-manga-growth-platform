@@ -10,6 +10,11 @@ class AdMaterial(Base):
     __tablename__ = "ad_materials"
 
     id = Column(Integer, primary_key=True, index=True)
+    # project_id 用于把广告素材绑定到短剧项目，当前先做弱关联，兼容旧演示数据。
+    project_id = Column(Integer, nullable=True, index=True)
+    # episode_id / episode_no 用于把广告素材可选绑定到具体短剧分集；为空时代表项目级广告素材。
+    episode_id = Column(Integer, nullable=True, index=True)
+    episode_no = Column(Integer, nullable=True, index=True)
     content_plan_id = Column(Integer, nullable=True)
     script_polish_id = Column(Integer, nullable=True)
     storyboard_id = Column(Integer, nullable=True)

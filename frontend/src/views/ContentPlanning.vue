@@ -5,17 +5,44 @@
         <n-space vertical size="large">
           <n-card title="策划输入" :bordered="false">
             <n-form :model="form" label-placement="top">
+              <n-form-item label="所属短剧项目">
+                <ProjectPicker v-model="selectedProjectId" placeholder="建议选择短剧项目，方便沉淀到完整生产链路" />
+              </n-form-item>
+              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+                返回项目详情
+              </n-button>
               <n-form-item label="项目名称">
                 <n-input v-model:value="form.projectName" placeholder="例如：逆袭千金的北美爆款短剧" />
               </n-form-item>
               <n-form-item label="短剧题材">
-                <n-select v-model:value="form.genre" :options="genreOptions" />
+                <n-select
+                  v-model:value="form.genre"
+                  filterable
+                  label-field="label"
+                  value-field="value"
+                  placeholder="请选择短剧题材"
+                  :options="dictionaries.genres"
+                />
               </n-form-item>
               <n-form-item label="目标市场">
-                <n-select v-model:value="form.market" :options="marketOptions" />
+                <n-select
+                  v-model:value="form.market"
+                  filterable
+                  label-field="label"
+                  value-field="value"
+                  placeholder="请选择目标市场"
+                  :options="dictionaries.markets"
+                />
               </n-form-item>
               <n-form-item label="目标语言">
-                <n-select v-model:value="form.language" :options="languageOptions" />
+                <n-select
+                  v-model:value="form.language"
+                  filterable
+                  label-field="label"
+                  value-field="value"
+                  placeholder="请选择目标语言"
+                  :options="dictionaries.languages"
+                />
               </n-form-item>
               <n-form-item label="视频时长">
                 <n-radio-group v-model:value="form.duration">
@@ -109,17 +136,19 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NCard, NTag, useMessage } from 'naive-ui'
 import { createContentPlan, getContentPlanHistory } from '../api/content'
+import ProjectPicker from '../components/ProjectPicker.vue'
+import { useDictionaries } from '../composables/useDictionaries'
 import { usePipelineStore } from '../stores/pipeline'
 import type { ContentPlanBilingualFields, ContentPlanHistoryItem, ContentPlanRequest, ContentPlanResult } from '../types/content'
 
 const form = reactive<ContentPlanRequest>({
   projectName: '逆袭千金的北美爆款短剧',
-  genre: '爽文逆袭',
+  genre: '都市逆袭',
   market: '北美',
-  language: '英文',
+  language: 'en-US',
   duration: '60秒',
   sellingPoint: '女主被家族抛弃后用商业能力反击，前3秒需要强冲突，结尾留下复仇反转。',
 })
@@ -129,12 +158,11 @@ const result = ref<ContentPlanResult | null>(null)
 const history = ref<ContentPlanHistoryItem[]>([])
 const displayLanguage = ref<'zh' | 'target'>('zh')
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const pipeline = usePipelineStore()
-
-const genreOptions = ['都市情感', '家庭亲情', '悬疑反转', '爽文逆袭', '海外霸总'].map((item) => ({ label: item, value: item }))
-const marketOptions = ['北美', '东南亚', '日本', '韩国', '中东'].map((item) => ({ label: item, value: item }))
-const languageOptions = ['英文', '日文', '韩文', '泰文', '印尼文'].map((item) => ({ label: item, value: item }))
+const { dictionaries, loadDictionaries } = useDictionaries()
+const selectedProjectId = ref<number | null>(null)
 
 const contentView = computed<ContentPlanBilingualFields>(() => {
   // 旧历史数据没有 bilingual 时直接使用顶层字段，确保向后兼容。
@@ -213,16 +241,19 @@ async function handleGenerate() {
     message.warning('请填写项目名称和核心卖点')
     return
   }
+  if (!selectedProjectId.value) {
+    message.warning('建议选择短剧项目，方便沉淀到完整生产链路。')
+  }
 
   loading.value = true
   try {
-    const response = await createContentPlan({ ...form })
+    const response = await createContentPlan({ ...form, project_id: selectedProjectId.value })
     if (response.code === 0) {
       result.value = response.data
       if (response.data.recordId) pipeline.setContentPlanId(response.data.recordId)
       displayLanguage.value = 'zh'
       await loadHistory()
-      message.success('策划方案已生成并保存')
+      message.success(selectedProjectId.value ? '已生成并归属到当前短剧项目。' : '策划方案已生成并保存')
     }
   } catch {
     message.error('策划方案生成失败，请确认后端服务已启动')
@@ -231,7 +262,13 @@ async function handleGenerate() {
   }
 }
 
-onMounted(loadHistory)
+onMounted(async () => {
+  await loadDictionaries()
+  // 从项目详情页进入时，先写入 projectId，ProjectPicker 会负责加载并回显项目信息。
+  const queryProjectId = Number(route.query.projectId)
+  if (queryProjectId) selectedProjectId.value = queryProjectId
+  await loadHistory()
+})
 </script>
 
 <style scoped>
@@ -241,6 +278,10 @@ onMounted(loadHistory)
 
 .result-card {
   min-height: 620px;
+}
+
+.project-back-btn {
+  margin: -6px 0 14px;
 }
 
 .result-card :deep(.n-grid-item) {

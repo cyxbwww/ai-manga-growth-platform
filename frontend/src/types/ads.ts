@@ -4,6 +4,10 @@ export type AdsGenerateRequest = {
   market: string
   platform: string
   contentType: string
+  // project_id 用于把广告素材归属到短剧项目；不传时仍可独立生成。
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   contentPlanId?: number | null
   scriptPolishId?: number | null
   storyboardId?: number | null
@@ -32,6 +36,9 @@ export type AdsBilingualFields = {
 // 广告素材生成结果：bilingual 可选，兼容旧历史数据。
 export type AdsGenerateResult = {
   recordId?: number
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   projectName: string
   market: string
   platform: string

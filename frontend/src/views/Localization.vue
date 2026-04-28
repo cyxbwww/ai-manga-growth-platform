@@ -1,12 +1,52 @@
 <template>
   <div class="module-page">
     <n-card title="本地化配置" :bordered="false" class="config-card">
+      <div class="project-bind-row">
+        <n-form-item label="所属短剧项目" class="project-select">
+          <ProjectPicker
+            v-model="selectedProjectId"
+            placeholder="建议选择短剧项目，方便沉淀到完整生产链路"
+            @change="handleProjectChange"
+          />
+        </n-form-item>
+        <n-form-item label="所属分集" class="project-select">
+          <EpisodePicker
+            v-model="episodeId"
+            :project-id="selectedProjectId"
+            :episode-no="episodeNo"
+            placeholder="请选择要本地化的具体分集"
+            @change="handleEpisodeChange"
+          />
+        </n-form-item>
+        <n-button v-if="selectedProjectId" secondary @click="router.push(`/projects/${selectedProjectId}`)">返回项目详情</n-button>
+      </div>
+      <n-button v-if="selectedProjectId" size="small" secondary class="episode-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+        返回分集列表
+      </n-button>
       <n-grid :cols="24" :x-gap="14" :y-gap="14" responsive="screen">
         <n-grid-item :span="5" :s-span="24">
-          <n-form-item label="目标市场"><n-select v-model:value="form.market" :options="marketOptions" /></n-form-item>
+          <n-form-item label="目标市场">
+            <n-select
+              v-model:value="form.market"
+              filterable
+              label-field="label"
+              value-field="value"
+              placeholder="请选择目标市场"
+              :options="dictionaries.markets"
+            />
+          </n-form-item>
         </n-grid-item>
         <n-grid-item :span="5" :s-span="24">
-          <n-form-item label="目标语言"><n-select v-model:value="form.language" :options="languageOptions" /></n-form-item>
+          <n-form-item label="目标语言">
+            <n-select
+              v-model:value="form.language"
+              filterable
+              label-field="label"
+              value-field="value"
+              placeholder="请选择目标语言"
+              :options="dictionaries.languages"
+            />
+          </n-form-item>
         </n-grid-item>
         <n-grid-item :span="7" :s-span="24">
           <n-form-item label="本地化策略"><n-select v-model:value="form.strategy" :options="strategyOptions" /></n-form-item>
@@ -56,7 +96,7 @@
               </n-card>
 
               <div class="next-step-row">
-                <n-button type="primary" secondary @click="router.push('/ad-materials')">进入海外投放素材</n-button>
+                <n-button type="primary" secondary @click="goWithContext('/ad-materials')">进入海外投放素材</n-button>
               </div>
             </template>
             <n-empty v-else description="选择配置后开始本地化，或点击历史记录查看已保存结果。" />
@@ -99,30 +139,48 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getLocalizationHistory, processLocalization } from '../api/localization'
+import EpisodePicker from '../components/EpisodePicker.vue'
+import ProjectPicker from '../components/ProjectPicker.vue'
+import { useDictionaries } from '../composables/useDictionaries'
 import { usePipelineStore } from '../stores/pipeline'
+import type { ShortDramaEpisode } from '../types/episode'
 import type { LocalizedSubtitle, LocalizationHistoryItem, LocalizationProcessRequest, LocalizationProcessResult } from '../types/localization'
+import type { ShortDramaProject } from '../types/project'
 
 const router = useRouter()
+const route = useRoute()
 const pipeline = usePipelineStore()
+const { dictionaries, loadDictionaries } = useDictionaries()
 
 const form = reactive<LocalizationProcessRequest>({
   market: '北美',
-  language: '英语',
+  language: 'en-US',
   strategy: '情绪强化',
 })
 
 const loading = ref(false)
 const result = ref<LocalizationProcessResult | null>(null)
 const history = ref<LocalizationHistoryItem[]>([])
+const selectedProjectId = ref<number | null>(null)
+const episodeId = ref<number | null>(null)
+const episodeNo = ref<number | null>(null)
 const message = useMessage()
 
-const marketOptions = ['北美', '东南亚', '日本', '韩国', '中东'].map((item) => ({ label: item, value: item }))
-const languageOptions = ['英语', '日语', '韩语', '泰语', '印尼语', '阿拉伯语'].map((item) => ({ label: item, value: item }))
 const strategyOptions = ['直译', '情绪强化', '文化适配', '广告转化优先'].map((item) => ({ label: item, value: item }))
+
+function handleProjectChange(_project: ShortDramaProject | null) {
+  loadHistory()
+}
+
+function handleEpisodeChange(episode: ShortDramaEpisode | null) {
+  episodeId.value = episode?.id || null
+  episodeNo.value = episode?.episode_no || null
+  loadHistory()
+}
 
 function statusTag(status: string) {
   if (status.includes('已')) return 'success'
@@ -159,19 +217,42 @@ function selectHistory(item: LocalizationHistoryItem) {
   if (item.scriptPolishId) pipeline.setScriptPolishId(item.scriptPolishId)
   if (item.storyboardId) pipeline.setStoryboardId(item.storyboardId)
   pipeline.setLocalizationId(item.recordId || item.id)
+  if (item.project_id) selectedProjectId.value = item.project_id
   message.success('已加载历史本地化结果')
 }
 
 async function loadHistory() {
-  const response = await getLocalizationHistory()
+  const response = await getLocalizationHistory({
+    project_id: selectedProjectId.value || undefined,
+    episode_id: episodeId.value || undefined,
+    episode_no: episodeNo.value || undefined,
+  })
   if (response.code === 0) history.value = response.data
 }
 
+function loadEpisodeQuery() {
+  // 从分集列表进入时会携带 episodeId / episodeNo；没有这些参数时保持旧的独立本地化流程。
+  const queryEpisodeId = Number(route.query.episodeId)
+  const queryEpisodeNo = Number(route.query.episodeNo)
+  episodeId.value = queryEpisodeId || null
+  episodeNo.value = queryEpisodeNo || null
+}
+
 async function handleProcess() {
+  if (!selectedProjectId.value) {
+    message.warning('建议选择短剧项目，方便沉淀到完整生产链路。')
+  }
+  if (!episodeId.value) {
+    message.warning('请选择具体分集，本地化结果需要沉淀到对应集数。')
+    return
+  }
   loading.value = true
   try {
     const response = await processLocalization({
       ...form,
+      project_id: selectedProjectId.value,
+      episode_id: episodeId.value,
+      episode_no: episodeNo.value,
       contentPlanId: pipeline.contentPlanId,
       scriptPolishId: pipeline.scriptPolishId,
       storyboardId: pipeline.storyboardId,
@@ -180,7 +261,7 @@ async function handleProcess() {
       result.value = response.data
       if (response.data.recordId) pipeline.setLocalizationId(response.data.recordId)
       await loadHistory()
-      message.success('本地化处理完成并保存')
+      message.success(selectedProjectId.value ? '已生成并归属到当前短剧项目。' : '本地化处理完成并保存')
     }
   } catch {
     message.error('本地化处理失败，请确认后端服务已启动')
@@ -189,7 +270,22 @@ async function handleProcess() {
   }
 }
 
-onMounted(loadHistory)
+function goWithContext(path: string) {
+  const query = new URLSearchParams()
+  if (selectedProjectId.value) query.set('projectId', String(selectedProjectId.value))
+  if (episodeId.value) query.set('episodeId', String(episodeId.value))
+  if (episodeNo.value) query.set('episodeNo', String(episodeNo.value))
+  router.push(`${path}${query.toString() ? `?${query.toString()}` : ''}`)
+}
+
+onMounted(async () => {
+  await loadDictionaries()
+  loadEpisodeQuery()
+  // 从项目详情页或分集列表进入时，ProjectPicker 会根据 projectId 加载并回显项目详情。
+  const queryProjectId = Number(route.query.projectId)
+  if (queryProjectId) selectedProjectId.value = queryProjectId
+  await loadHistory()
+})
 </script>
 
 <style scoped>
@@ -198,6 +294,37 @@ onMounted(loadHistory)
   flex-direction: column;
   gap: 18px;
   min-height: calc(100vh - 120px);
+}
+
+.project-bind-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.project-select {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.episode-context-card {
+  margin-bottom: 14px;
+  background: #f8fafc;
+}
+
+.episode-context-title {
+  color: #111827;
+  font-weight: 800;
+}
+
+.episode-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 8px 0 12px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .result-card,

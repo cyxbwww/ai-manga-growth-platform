@@ -1,8 +1,9 @@
 import json
 import time
+from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel
@@ -10,8 +11,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import AI_API_KEY, AI_BASE_URL, AI_MAX_TOKENS, AI_MODEL, AI_PROVIDER, AI_TEMPERATURE, AI_TIMEOUT
 from app.core.database import get_db
+from app.models.short_drama_episode import ShortDramaEpisode
 from app.models.storyboard import Storyboard
 from app.services.ai_service import generate_json
+from app.services.project_flow import advance_project_stage
 
 
 router = APIRouter(prefix="/storyboard")
@@ -34,6 +37,9 @@ SCENE_TEXT_FIELDS = [
 
 
 class StoryboardGenerateRequest(BaseModel):
+    project_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    episode_no: Optional[int] = None
     title: str
     script: str
     style: str
@@ -219,6 +225,9 @@ def save_storyboard_record(payload: StoryboardGenerateRequest, result: dict, db:
     stored_result = dict(result)
     stored_result.pop("recordId", None)
     record = Storyboard(
+        project_id=payload.project_id,
+        episode_id=payload.episode_id,
+        episode_no=payload.episode_no,
         title=payload.title,
         script=payload.script,
         style=payload.style,
@@ -230,6 +239,19 @@ def save_storyboard_record(payload: StoryboardGenerateRequest, result: dict, db:
     db.add(record)
     db.commit()
     db.refresh(record)
+    advance_project_stage(db, payload.project_id, "localization")
+    # 分集级生产状态流转：分镜生成完成后，该集进入本地化准备阶段；失败不影响主流程返回。
+    if payload.episode_id:
+        try:
+            episode = db.query(ShortDramaEpisode).filter(ShortDramaEpisode.id == payload.episode_id).first()
+            if episode:
+                episode.storyboard_status = "completed"
+                episode.stage = "localization"
+                episode.updated_at = datetime.now()
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"分镜生成后更新分集状态失败，已忽略：episode_id={payload.episode_id}, error={exc}")
     return record
 
 
@@ -257,7 +279,11 @@ def generate_storyboard(payload: StoryboardGenerateRequest, db: Session = Depend
     ai_result = generate_json(SYSTEM_PROMPT, build_user_prompt(payload), fallback_data)
     result = normalize_storyboard_result(ai_result, fallback_data, payload.sceneCount)
     record = save_storyboard_record(payload, result, db)
-    return {"code": 0, "message": "success", "data": {"recordId": record.id, **result}}
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {"recordId": record.id, "project_id": payload.project_id, "episode_id": payload.episode_id, "episode_no": payload.episode_no, **result},
+    }
 
 
 @router.post("/stream")
@@ -278,14 +304,26 @@ def stream_storyboard(payload: StoryboardGenerateRequest, db: Session = Depends(
             yield sse_event({"type": "scene", "data": scene})
             time.sleep(0.3)
         record = save_storyboard_record(payload, result, db)
-        yield sse_event({"type": "done", "data": {"recordId": record.id}})
+        yield sse_event({"type": "done", "data": {"recordId": record.id, "project_id": payload.project_id, "episode_id": payload.episode_id, "episode_no": payload.episode_no}})
 
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/list")
-def get_storyboard_history(db: Session = Depends(get_db)):
-    records = db.query(Storyboard).order_by(Storyboard.created_at.desc()).limit(20).all()
+def get_storyboard_history(
+    project_id: Optional[int] = Query(default=None),
+    episode_id: Optional[int] = Query(default=None),
+    episode_no: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Storyboard)
+    if project_id:
+        query = query.filter(Storyboard.project_id == project_id)
+    if episode_id:
+        query = query.filter(Storyboard.episode_id == episode_id)
+    if episode_no:
+        query = query.filter(Storyboard.episode_no == episode_no)
+    records = query.order_by(Storyboard.created_at.desc()).limit(20).all()
     data = []
     for item in records:
         fallback_payload = StoryboardGenerateRequest(title=item.title, script=item.script, style=item.style, sceneCount=item.scene_count)
@@ -300,6 +338,9 @@ def get_storyboard_history(db: Session = Depends(get_db)):
             {
                 "id": item.id,
                 "recordId": item.id,
+                "project_id": item.project_id,
+                "episode_id": item.episode_id,
+                "episode_no": item.episode_no,
                 "contentPlanId": item.content_plan_id,
                 "scriptPolishId": item.script_polish_id,
                 "title": item.title,

@@ -8,6 +8,6 @@ export function generateAds(payload: AdsGenerateRequest) {
 }
 
 // 获取最近 20 条广告素材历史记录。
-export function getAdMaterialHistory() {
-  return request.get<unknown, ApiResponse<AdMaterialHistoryItem[]>>('/ads/list')
+export function getAdMaterialHistory(params: { project_id?: number | null; episode_id?: number | null; episode_no?: number | null } = {}) {
+  return request.get<unknown, ApiResponse<AdMaterialHistoryItem[]>>('/ads/list', { params })
 }

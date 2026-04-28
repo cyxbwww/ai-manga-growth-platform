@@ -8,6 +8,29 @@
               前端选择文件后，先向后端获取 S3 presigned URL，再由浏览器直传 S3；FastAPI 只保存素材元数据。
             </n-alert>
 
+            <n-form-item label="所属短剧项目">
+              <ProjectPicker
+                v-model="selectedProjectId"
+                placeholder="建议选择短剧项目，方便沉淀到完整生产链路"
+                @change="handleProjectChange"
+              />
+            </n-form-item>
+            <n-form-item label="所属分集">
+              <EpisodePicker
+                v-model="episodeId"
+                :project-id="selectedProjectId"
+                :episode-no="episodeNo"
+                placeholder="请选择要上传媒体资产的具体分集"
+                @change="handleEpisodeChange"
+              />
+            </n-form-item>
+            <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+              返回项目详情
+            </n-button>
+            <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+              返回分集列表
+            </n-button>
+
             <div class="upload-box">
               <input ref="fileInputRef" class="file-input" type="file" :accept="acceptTypes" @change="handleFileChange" />
               <n-button type="primary" secondary @click="fileInputRef?.click()">选择视频 / 图片 / 字幕</n-button>
@@ -63,12 +86,19 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { completeMediaUpload, getMediaAssets, presignMedia } from '../api/media'
+import EpisodePicker from '../components/EpisodePicker.vue'
+import ProjectPicker from '../components/ProjectPicker.vue'
+import type { ShortDramaEpisode } from '../types/episode'
 import type { MediaAsset, MediaPresignResult } from '../types/media'
+import type { ShortDramaProject } from '../types/project'
 
 const message = useMessage()
+const route = useRoute()
+const router = useRouter()
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const assets = ref<MediaAsset[]>([])
@@ -76,12 +106,27 @@ const previewAsset = ref<MediaAsset | null>(null)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadStatusText = ref('等待选择文件')
+const selectedProjectId = ref<number | null>(null)
+const episodeId = ref<number | null>(null)
+const episodeNo = ref<number | null>(null)
 
 const acceptTypes = '.mp4,.mov,.webm,.jpg,.jpeg,.png,.srt'
 const progressStatus = computed(() => (uploadProgress.value >= 100 ? 'success' : 'default'))
 
+function handleProjectChange(_project: ShortDramaProject | null) {
+  loadAssets()
+}
+
+function handleEpisodeChange(episode: ShortDramaEpisode | null) {
+  episodeId.value = episode?.id || null
+  episodeNo.value = episode?.episode_no || null
+  loadAssets()
+}
+
 const columns: DataTableColumns<MediaAsset> = [
   { title: '文件名', key: 'originalFilename', minWidth: 180 },
+  { title: '集数', key: 'episode_no', width: 90, render: (row) => row.episode_no ? `第 ${row.episode_no} 集` : '-' },
+  { title: '分集 ID', key: 'episode_id', width: 90, render: (row) => row.episode_id || '-' },
   {
     title: '类型',
     key: 'fileType',
@@ -173,23 +218,43 @@ async function mockUploadProgress() {
 }
 
 async function finishUpload(presign: MediaPresignResult) {
-  const response = await completeMediaUpload({ assetId: presign.assetId, objectKey: presign.objectKey })
+  const response = await completeMediaUpload({
+    assetId: presign.assetId,
+    objectKey: presign.objectKey,
+    project_id: selectedProjectId.value,
+    episode_id: episodeId.value,
+    episode_no: episodeNo.value,
+  })
   if (response.code === 0) {
     previewAsset.value = response.data
     uploadStatusText.value = '上传完成，素材记录已保存'
-    message.success('素材上传完成')
+    message.success(selectedProjectId.value ? '媒体资产已归属到当前短剧项目。' : '素材上传完成')
     await loadAssets()
   }
 }
 
 async function handleUpload() {
   if (!selectedFile.value) return
+  if (!selectedProjectId.value) {
+    message.warning('建议选择短剧项目，方便沉淀到完整生产链路。')
+  }
+  if (!episodeId.value) {
+    message.warning('请选择具体分集，媒体资产需要归属到对应集数。')
+    return
+  }
   uploading.value = true
   uploadProgress.value = 0
   try {
     const file = selectedFile.value
     const mimeType = normalizeMimeType(file)
-    const response = await presignMedia({ filename: file.name, mimeType, size: file.size })
+    const response = await presignMedia({
+      filename: file.name,
+      mimeType,
+      size: file.size,
+      project_id: selectedProjectId.value,
+      episode_id: episodeId.value,
+      episode_no: episodeNo.value,
+    })
     if (response.code !== 0) return
 
     if (response.data.provider === 'mock') await mockUploadProgress()
@@ -205,14 +270,33 @@ async function handleUpload() {
 }
 
 async function loadAssets() {
-  const response = await getMediaAssets()
+  const response = await getMediaAssets({
+    project_id: selectedProjectId.value || undefined,
+    episode_id: episodeId.value || undefined,
+    episode_no: episodeNo.value || undefined,
+  })
   if (response.code === 0) {
     assets.value = response.data
     if (!previewAsset.value && response.data.length) previewAsset.value = response.data[0]
+    if (previewAsset.value && selectedProjectId.value && previewAsset.value.project_id !== selectedProjectId.value) previewAsset.value = response.data[0] || null
   }
 }
 
-onMounted(loadAssets)
+function loadEpisodeQuery() {
+  // 从分集列表进入时会携带 episodeId / episodeNo；没有这些参数时媒体资产页保持独立可用。
+  const queryEpisodeId = Number(route.query.episodeId)
+  const queryEpisodeNo = Number(route.query.episodeNo)
+  episodeId.value = queryEpisodeId || null
+  episodeNo.value = queryEpisodeNo || null
+}
+
+onMounted(async () => {
+  loadEpisodeQuery()
+  // 从项目详情页或分集列表进入时，ProjectPicker 会根据 projectId 加载并回显项目详情。
+  const queryProjectId = Number(route.query.projectId)
+  if (queryProjectId) selectedProjectId.value = queryProjectId
+  await loadAssets()
+})
 </script>
 
 <style scoped>
@@ -222,6 +306,33 @@ onMounted(loadAssets)
 
 .upload-note {
   margin-bottom: 16px;
+}
+
+.project-back-btn {
+  margin-bottom: 16px;
+}
+
+.episode-context-card {
+  margin-bottom: 14px;
+  background: #f8fafc;
+}
+
+.episode-context-title {
+  color: #111827;
+  font-weight: 800;
+}
+
+.episode-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 8px 0 12px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.full-width {
+  width: 100%;
 }
 
 .upload-box {

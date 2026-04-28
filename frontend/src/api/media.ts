@@ -13,8 +13,8 @@ export function completeMediaUpload(payload: MediaCompleteRequest) {
 }
 
 // 获取最近 50 条素材记录。
-export function getMediaAssets() {
-  return request.get<unknown, ApiResponse<MediaAsset[]>>('/media/assets')
+export function getMediaAssets(params: { project_id?: number | null; episode_id?: number | null; episode_no?: number | null } = {}) {
+  return request.get<unknown, ApiResponse<MediaAsset[]>>('/media/assets', { params })
 }
 
 export function getMediaAsset(assetId: number) {
