@@ -240,9 +240,11 @@ const touchedFields = reactive<Record<'projectName' | 'genre' | 'market' | 'lang
 })
 
 const contentView = computed<ContentPlanBilingualFields>(() => {
-  // 旧历史数据没有 bilingual 时直接使用顶层字段，确保向后兼容。
-  if (!result.value?.bilingual) return result.value as ContentPlanResult
-  return displayLanguage.value === 'target' ? result.value.bilingual.target : result.value.bilingual.zh
+  if (!result.value) return emptyContentView('zh')
+  if (displayLanguage.value === 'target') return normalizeContentView(result.value.bilingual?.target, 'target')
+  // 中文 Tab 只读取 bilingual.zh；旧数据没有 bilingual 时才读取顶层字段，不使用 target 兜底。
+  if (result.value.bilingual?.zh) return normalizeContentView(result.value.bilingual.zh, 'zh')
+  return normalizeContentView(result.value, 'zh')
 })
 
 const currentContentPlanId = computed(() => result.value?.recordId || pipeline.contentPlanId || null)
@@ -305,6 +307,37 @@ const ListBlock = defineComponent({
       })
   },
 })
+
+function emptyContentView(language: 'zh' | 'target'): ContentPlanBilingualFields {
+  const placeholder = language === 'zh' ? '暂无中文内容' : '暂无目标语言内容'
+  return {
+    title: placeholder,
+    positioning: placeholder,
+    targetAudience: placeholder,
+    coreConflict: placeholder,
+    emotionHook: placeholder,
+    openingHook: placeholder,
+    highlights: [placeholder],
+    platforms: [],
+    suggestions: [placeholder],
+  }
+}
+
+function normalizeContentView(value: Partial<ContentPlanBilingualFields> | undefined, language: 'zh' | 'target'): ContentPlanBilingualFields {
+  const fallback = emptyContentView(language)
+  if (!value) return fallback
+  return {
+    title: value.title || fallback.title,
+    positioning: value.positioning || fallback.positioning,
+    targetAudience: value.targetAudience || fallback.targetAudience,
+    coreConflict: value.coreConflict || fallback.coreConflict,
+    emotionHook: value.emotionHook || fallback.emotionHook,
+    openingHook: value.openingHook || fallback.openingHook,
+    highlights: Array.isArray(value.highlights) && value.highlights.length ? value.highlights : fallback.highlights,
+    platforms: Array.isArray(value.platforms) ? value.platforms : fallback.platforms,
+    suggestions: Array.isArray(value.suggestions) && value.suggestions.length ? value.suggestions : fallback.suggestions,
+  }
+}
 
 function formatTime(value: string) {
   return new Date(value).toLocaleString()

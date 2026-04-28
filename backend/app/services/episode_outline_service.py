@@ -12,8 +12,24 @@ logger = logging.getLogger(__name__)
 
 OUTLINE_SYSTEM_PROMPT = (
     "你是一个短剧分集大纲策划专家，擅长把项目级内容策划拆解成强冲突、强钩子、快节奏的多集短剧大纲。"
+    "分集大纲是给编剧、运营、导演审核的内部生产稿，必须统一使用中文。"
     "你必须严格输出 JSON 对象，不要输出 Markdown，不要解释，不要输出代码块。"
 )
+
+OUTLINE_LANGUAGE_RULES = """
+【分集大纲语言规则】
+1. 你必须使用中文输出分集大纲。
+2. 每一集的 title 必须是中文。
+3. 每一集的 title 必须建议使用格式：第 X 集：中文标题。
+4. 每一集的 summary 必须是中文。
+5. 不允许 title 使用英文标题。
+6. 不允许 summary 出现英文完整句子。
+7. 即使项目目标市场是北美、东南亚，分集大纲也必须中文。
+8. 目标市场只用于参考剧情风格、爽点偏好和投放节奏。
+9. 海外语言版本会在后续本地化阶段生成。
+10. 不要输出 Markdown。
+11. 严格输出 JSON。
+"""
 
 
 def parse_content_plan_result(content_plan: ContentPlan | None) -> dict[str, Any]:
@@ -63,10 +79,13 @@ def build_outline_user_prompt(
     content_plan: ContentPlan | None,
     episode_count: int,
     start_episode_no: int,
+    strict_language_retry: bool = False,
 ) -> str:
     context = build_outline_context(project, content_plan)
     plan_result = parse_content_plan_result(content_plan)
     plan_result_text = json.dumps(plan_result, ensure_ascii=False)[:6000] if plan_result else "无内容策划结构化结果，使用项目简介兜底。"
+
+    retry_rule = "这是一次语言校验失败后的重试。请逐集检查 title 和 summary，禁止英文标题，禁止英文完整句子。" if strict_language_retry else ""
 
     return f"""
 请基于以下短剧项目信息和内容策划结果，生成分集大纲。
@@ -94,12 +113,15 @@ def build_outline_user_prompt(
 - episode_count：{episode_count}
 - start_episode_no：{start_episode_no}
 
+{OUTLINE_LANGUAGE_RULES}
+{retry_rule}
+
 输出要求：
 1. 只输出 JSON，不要 Markdown，不要解释文字。
 2. episodes 数量必须等于 {episode_count}。
 3. episode_no 必须从 {start_episode_no} 开始连续递增。
-4. title 要体现短剧爽点，不要空泛。
-5. summary 必须包含四段：本集剧情推进、核心冲突、开场钩子、结尾悬念。
+4. title 要体现短剧爽点，不要空泛，必须为中文标题。
+5. summary 必须包含四段：本集剧情推进、核心冲突、开场钩子、结尾悬念，且必须全中文。
 6. 风格必须符合短剧：强冲突、强钩子、快节奏、每集结尾有悬念。
 
 严格按以下格式输出：
@@ -127,6 +149,41 @@ def extract_json_text(text: str) -> str:
     if start >= 0 and end > start:
         return content[start : end + 1]
     return content
+
+
+def count_pattern(pattern: str, text: str) -> int:
+    return len(re.findall(pattern, text))
+
+
+def contains_chinese(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
+def is_valid_chinese_episode_title(title: str) -> bool:
+    text = (title or "").strip()
+    if not contains_chinese(text):
+        return False
+    chinese_count = count_pattern(r"[\u4e00-\u9fff]", text)
+    english_words = count_pattern(r"\b[A-Za-z]{2,}\b", text)
+    return chinese_count >= max(1, english_words)
+
+
+def is_valid_chinese_episode_summary(summary: str) -> bool:
+    text = (summary or "").strip()
+    chinese_count = count_pattern(r"[\u4e00-\u9fff]", text)
+    english_words = count_pattern(r"\b[A-Za-z]{3,}\b", text)
+    if chinese_count < 20:
+        return False
+    return chinese_count >= english_words * 2
+
+
+def validate_episode_outline_language(episodes: list[dict[str, Any]]) -> bool:
+    for item in episodes:
+        if not is_valid_chinese_episode_title(str(item.get("title") or "")):
+            return False
+        if not is_valid_chinese_episode_summary(str(item.get("summary") or "")):
+            return False
+    return True
 
 
 def parse_llm_outline_response(text: str, episode_count: int, start_episode_no: int) -> list[dict[str, Any]]:
@@ -157,6 +214,8 @@ def parse_llm_outline_response(text: str, episode_count: int, start_episode_no: 
                 "summary": summary,
             }
         )
+    if not validate_episode_outline_language(normalized):
+        raise ValueError("分集大纲语言校验失败，title 或 summary 非中文")
     return normalized
 
 
@@ -242,15 +301,25 @@ def generate_episode_outline_items(
     safe_count = max(1, min(episode_count, 30))
     start_no = max(1, start_episode_no)
     fallback_items = generate_rule_outline_items(project, content_plan, safe_count, start_no)
-    prompt = build_outline_user_prompt(project, content_plan, safe_count, start_no)
+    for attempt in range(2):
+        prompt = build_outline_user_prompt(project, content_plan, safe_count, start_no, strict_language_retry=attempt > 0)
+        content, error = request_ai_text(OUTLINE_SYSTEM_PROMPT, prompt, response_format_json=True)
+        if error or not content:
+            logger.warning("Episode outline DeepSeek fallback: %s", error)
+            return fallback_items, "rule_fallback"
 
-    content, error = request_ai_text(OUTLINE_SYSTEM_PROMPT, prompt, response_format_json=True)
-    if error or not content:
-        logger.warning("Episode outline DeepSeek fallback: %s", error)
-        return fallback_items, "rule_fallback"
+        try:
+            return parse_llm_outline_response(content, safe_count, start_no), "deepseek"
+        except ValueError as exc:
+            if "语言校验失败" in str(exc):
+                logger.warning(
+                    "分集大纲语言校验失败，title 或 summary 非中文，%s。",
+                    "准备重试" if attempt == 0 else "使用规则 fallback",
+                )
+            else:
+                logger.warning("Episode outline DeepSeek response invalid, %s: %s", "retry" if attempt == 0 else "fallback to rule", exc)
+            if attempt == 0:
+                continue
+            return fallback_items, "rule_fallback"
 
-    try:
-        return parse_llm_outline_response(content, safe_count, start_no), "deepseek"
-    except ValueError as exc:
-        logger.warning("Episode outline DeepSeek response invalid, fallback to rule: %s", exc)
-        return fallback_items, "rule_fallback"
+    return fallback_items, "rule_fallback"
