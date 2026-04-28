@@ -1,12 +1,14 @@
 import json
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.script_polish import ScriptPolish
+from app.models.short_drama_episode import ShortDramaEpisode
 from app.services.ai_service import generate_json
 from app.services.dictionary_service import language_prompt_name, normalize_language_code
 from app.services.project_flow import advance_project_stage
@@ -28,6 +30,8 @@ BILINGUAL_REQUIREMENT = (
 class ScriptPolishRequest(BaseModel):
     # 剧本打磨请求：directions 为用户选择的优化方向。
     project_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    episode_no: Optional[int] = None
     title: str
     script: str
     directions: list[str]
@@ -150,6 +154,26 @@ def build_user_prompt(payload: ScriptPolishRequest) -> str:
 """
 
 
+def advance_episode_after_script_polish(db: Session, payload: ScriptPolishRequest) -> None:
+    if not payload.episode_id:
+        return
+    try:
+        query = db.query(ShortDramaEpisode).filter(ShortDramaEpisode.id == payload.episode_id)
+        if payload.project_id:
+            query = query.filter(ShortDramaEpisode.project_id == payload.project_id)
+        episode = query.first()
+        if not episode:
+            return
+        # 分集级剧本打磨完成后，推动该集进入 AI 分镜阶段；弱关联失败不影响主记录保存。
+        episode.script_status = "completed"
+        episode.stage = "storyboard"
+        episode.updated_at = datetime.now()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"更新分集剧本状态失败: {exc}")
+
+
 @router.post("/polish")
 def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
     language_code = script_language_code(payload)
@@ -158,6 +182,8 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
 
     record = ScriptPolish(
         project_id=payload.project_id,
+        episode_id=payload.episode_id,
+        episode_no=payload.episode_no,
         content_plan_id=payload.contentPlanId,
         language=language_code,
         title=payload.title,
@@ -169,6 +195,7 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(record)
     advance_project_stage(db, payload.project_id, "storyboard")
+    advance_episode_after_script_polish(db, payload)
 
     return {
         "code": 0,
@@ -176,6 +203,8 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
         "data": {
             "recordId": record.id,
             "project_id": payload.project_id,
+            "episode_id": payload.episode_id,
+            "episode_no": payload.episode_no,
             "language": language_code,
             "target_language": language_code,
             **result,
@@ -184,8 +213,20 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/polishes")
-def get_script_polish_history(db: Session = Depends(get_db)):
-    records = db.query(ScriptPolish).order_by(ScriptPolish.created_at.desc()).limit(20).all()
+def get_script_polish_history(
+    project_id: Optional[int] = Query(default=None),
+    episode_id: Optional[int] = Query(default=None),
+    episode_no: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(ScriptPolish)
+    if project_id is not None:
+        query = query.filter(ScriptPolish.project_id == project_id)
+    if episode_id is not None:
+        query = query.filter(ScriptPolish.episode_id == episode_id)
+    if episode_no is not None:
+        query = query.filter(ScriptPolish.episode_no == episode_no)
+    records = query.order_by(ScriptPolish.created_at.desc()).limit(20).all()
     data = []
     for item in records:
         result = json.loads(item.result_json)
@@ -194,6 +235,8 @@ def get_script_polish_history(db: Session = Depends(get_db)):
             "id": item.id,
             "recordId": item.id,
             "project_id": item.project_id,
+            "episode_id": item.episode_id,
+            "episode_no": item.episode_no,
             "contentPlanId": item.content_plan_id,
             "language": language_code,
             "target_language": language_code,

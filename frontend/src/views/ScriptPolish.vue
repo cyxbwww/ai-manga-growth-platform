@@ -6,7 +6,7 @@
           <n-card title="剧本输入" :bordered="false">
             <!-- 项目级定位说明：弱化旧 contentPlanId 链路，强调整部短剧的规划打磨能力。 -->
             <n-alert type="info" :bordered="false" class="pipeline-tip">
-              当前为项目级剧本打磨，可基于内容策划结果优化整部短剧的大纲、人物关系、核心冲突、节奏和前三秒钩子。分集级剧本处理建议从分集管理进入。
+              {{ workspaceDescription }}
             </n-alert>
             <n-alert v-if="selectedProjectId" type="success" :bordered="false" class="pipeline-tip">
               当前结果将归属到所选短剧项目。
@@ -26,6 +26,16 @@
               <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
                 返回项目详情
               </n-button>
+              <n-form-item label="所属分集">
+                <EpisodePicker
+                  v-model="selectedEpisodeId"
+                  :project-id="selectedProjectId"
+                  :episode-no="selectedEpisodeNo"
+                  placeholder="可选：选择分集后切换为分集级剧本打磨"
+                  clearable
+                  @change="handleEpisodeChange"
+                />
+              </n-form-item>
               <n-alert v-if="contentPlanTip.message" :type="contentPlanTip.type" :bordered="false" class="pipeline-tip">
                 {{ contentPlanTip.message }}
               </n-alert>
@@ -79,7 +89,7 @@
 
       <n-grid-item :span="16" :s-span="24">
         <n-spin :show="loading">
-          <n-card title="项目级剧本打磨工作台" :bordered="false" class="result-card">
+          <n-card :title="workspaceTitle" :bordered="false" class="result-card">
             <template #header-extra>
               <n-space align="center">
                 <n-radio-group v-if="result?.bilingual" v-model:value="displayLanguage" size="small">
@@ -177,7 +187,7 @@
               </n-card>
 
               <div class="next-step-row">
-                <n-button type="primary" secondary @click="router.push('/storyboard')">进入分镜制作</n-button>
+                <n-button type="primary" secondary @click="goStoryboard">进入分镜制作</n-button>
               </div>
             </template>
             <n-empty v-else description="输入剧本并选择打磨方向，或点击历史记录查看已保存结果。" />
@@ -189,18 +199,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getContentPlanHistory } from '../api/content'
+import { getEpisodeDetail } from '../api/episodes'
 import { getPipelineDetail } from '../api/pipeline'
 import { getScriptPolishHistory, polishScript } from '../api/script'
+import EpisodePicker from '../components/EpisodePicker.vue'
 import ProjectPicker from '../components/ProjectPicker.vue'
 import { useDictionaries } from '../composables/useDictionaries'
 import { usePipelineStore } from '../stores/pipeline'
 import type { ContentPlanHistoryItem } from '../types/content'
 import type { ScriptPolishBilingualFields, ScriptPolishHistoryItem, ScriptPolishRequest, ScriptPolishResult } from '../types/script'
 import type { ShortDramaProject } from '../types/project'
+import type { ShortDramaEpisode } from '../types/episode'
 
 type ProjectChangePayload = ShortDramaProject & {
   primary_language?: string
@@ -224,6 +237,10 @@ const router = useRouter()
 const pipeline = usePipelineStore()
 const { getLabel, loadDictionaries } = useDictionaries()
 const selectedProjectId = ref<number | null>(null)
+const selectedEpisodeId = ref<number | null>(null)
+const selectedEpisodeNo = ref<number | null>(null)
+const currentProject = ref<ProjectChangePayload | null>(null)
+const currentEpisode = ref<ShortDramaEpisode | null>(null)
 const selectedLanguage = ref('en-US')
 const contentPlanTip = reactive<{ type: 'success' | 'info' | 'warning' | 'error', message: string }>({
   type: 'info',
@@ -244,6 +261,20 @@ const scriptView = computed<ScriptPolishBilingualFields>(() => {
   }
   return displayLanguage.value === 'target' ? result.value.bilingual.target : result.value.bilingual.zh
 })
+
+const isEpisodeMode = computed(() => Boolean(selectedEpisodeId.value))
+
+const workspaceTitle = computed(() => {
+  if (!isEpisodeMode.value) return '项目级剧本打磨工作台'
+  const no = selectedEpisodeNo.value || currentEpisode.value?.episode_no || route.query.episodeNo
+  return no ? `第 ${no} 集剧本打磨工作台` : '分集级剧本打磨工作台'
+})
+
+const workspaceDescription = computed(() =>
+  isEpisodeMode.value
+    ? '用于优化该集剧情、台词、转折、结尾悬念和短剧节奏。'
+    : '用于整部短剧的大纲、核心冲突、人物关系、整体节奏和前三秒钩子优化。',
+)
 
 const dimensionScores = computed(() => {
   const base = result.value?.score || 0
@@ -348,6 +379,56 @@ function buildScriptInputFromContentPlan(plan: ContentPlanHistoryItem) {
   return sections.join('\n\n')
 }
 
+async function getLatestContentPlan(projectId?: number | null) {
+  if (!projectId) return undefined
+  const response = await getContentPlanHistory({ project_id: projectId, limit: 1 })
+  return response.code === 0 ? response.data[0] : undefined
+}
+
+async function buildEpisodeScriptInput(episode: ShortDramaEpisode) {
+  const project = currentProject.value
+  let projectContext = project?.description || ''
+  try {
+    const latestPlan = await getLatestContentPlan(episode.project_id || selectedProjectId.value)
+    if (latestPlan) {
+      projectContext = buildScriptInputFromContentPlan(latestPlan)
+      if (latestPlan.recordId || latestPlan.id) pipeline.setContentPlanId(latestPlan.recordId || latestPlan.id)
+    }
+  } catch {
+    projectContext = project?.description || ''
+  }
+
+  const episodeTitle = episode.title?.startsWith(`第 ${episode.episode_no} 集`)
+    ? episode.title
+    : `第 ${episode.episode_no} 集：${episode.title}`
+
+  const sections = [
+    `【所属项目】\n${project?.name || form.title || ''}`,
+    `【当前分集】\n${episodeTitle}`,
+    `【分集剧情摘要】\n${episode.summary || episode.title || ''}`,
+  ]
+  if (projectContext.trim()) sections.push(`【项目背景补充】\n${projectContext.trim()}`)
+  sections.push('【本集打磨要求】\n请重点优化本集前三秒开场、关键冲突、人物台词、情绪爆点和结尾悬念。')
+  return sections.join('\n\n')
+}
+
+async function hydrateScriptFromEpisode(episode: ShortDramaEpisode) {
+  currentEpisode.value = episode
+  selectedEpisodeId.value = episode.id
+  selectedEpisodeNo.value = episode.episode_no
+  if (!selectedProjectId.value || selectedProjectId.value !== episode.project_id) {
+    selectedProjectId.value = episode.project_id
+  }
+  hydrateField('title', episode.title || currentProject.value?.name)
+
+  if (touchedFields.script) {
+    setContentPlanTip('warning', '已选择分集，当前原始文本已手动编辑，未覆盖。')
+    return
+  }
+  form.script = await buildEpisodeScriptInput(episode)
+  setContentPlanTip('success', '已引用当前分集大纲。')
+}
+
 async function hydrateScriptFromLatestContentPlan(project: ProjectChangePayload) {
   if (touchedFields.script) {
     setContentPlanTip('warning', '已选择项目，当前原始文本已手动编辑，未覆盖。')
@@ -355,8 +436,7 @@ async function hydrateScriptFromLatestContentPlan(project: ProjectChangePayload)
   }
 
   try {
-    const response = await getContentPlanHistory({ project_id: project.id, limit: 1 })
-    const latestPlan = response.code === 0 ? response.data[0] : undefined
+    const latestPlan = await getLatestContentPlan(project.id)
     if (latestPlan) {
       form.script = buildScriptInputFromContentPlan(latestPlan)
       if (latestPlan.recordId || latestPlan.id) pipeline.setContentPlanId(latestPlan.recordId || latestPlan.id)
@@ -374,19 +454,71 @@ async function hydrateScriptFromLatestContentPlan(project: ProjectChangePayload)
 
 async function handleProjectChange(project: ProjectChangePayload | null) {
   if (!project) {
+    currentProject.value = null
+    currentEpisode.value = null
+    selectedEpisodeId.value = null
+    selectedEpisodeNo.value = null
     selectedLanguage.value = 'en-US'
     contentPlanTip.message = ''
     return
   }
+  const projectChanged = Boolean(currentProject.value?.id && currentProject.value.id !== project.id)
+  currentProject.value = project
   selectedLanguage.value = project.primary_language || project.language || 'en-US'
+  if (projectChanged && (!selectedEpisodeId.value || currentEpisode.value?.project_id !== project.id)) {
+    currentEpisode.value = null
+    selectedEpisodeId.value = null
+    selectedEpisodeNo.value = null
+    await nextTick()
+  }
   // 选择项目后仅同步未手动编辑过的输入，避免覆盖编剧已经补充的标题和剧本文本。
   hydrateField('title', project.name)
-  await hydrateScriptFromLatestContentPlan(project)
+  if (!selectedEpisodeId.value) await hydrateScriptFromLatestContentPlan(project)
   message.success('已同步短剧项目基础信息。')
 }
 
-function selectHistory(item: ScriptPolishHistoryItem) {
+async function handleEpisodeChange(episode: ShortDramaEpisode | null) {
+  if (!episode) {
+    currentEpisode.value = null
+    selectedEpisodeId.value = null
+    selectedEpisodeNo.value = null
+    if (currentProject.value) {
+      setContentPlanTip('info', '已清空分集，当前切换为项目级剧本打磨。')
+    }
+    return
+  }
+  await hydrateScriptFromEpisode(episode)
+}
+
+async function hydrateEpisodeById(episodeId: number) {
+  try {
+    const response = await getEpisodeDetail(episodeId)
+    if (response.code === 0 && response.data) {
+      await hydrateScriptFromEpisode(response.data)
+    }
+  } catch {
+    setContentPlanTip('warning', '分集详情加载失败，请重新选择分集。')
+  }
+}
+
+async function selectHistory(item: ScriptPolishHistoryItem) {
   result.value = item.result
+  form.title = item.title || form.title
+  form.script = item.script || form.script
+  form.directions = item.directions || form.directions
+  touchedFields.title = true
+  touchedFields.script = true
+  selectedLanguage.value = item.language || item.target_language || selectedLanguage.value
+  selectedProjectId.value = item.project_id || null
+  if (item.episode_id) {
+    selectedEpisodeId.value = item.episode_id
+    selectedEpisodeNo.value = item.episode_no || null
+    await hydrateEpisodeById(item.episode_id)
+  } else {
+    currentEpisode.value = null
+    selectedEpisodeId.value = null
+    selectedEpisodeNo.value = null
+  }
   if (item.contentPlanId) pipeline.setContentPlanId(item.contentPlanId)
   pipeline.setScriptPolishId(item.recordId || item.id)
   displayLanguage.value = 'zh'
@@ -406,6 +538,14 @@ function replaceOriginalScript() {
   form.script = scriptView.value.polishedScript
   markFieldTouched('script')
   message.success('已用优化剧本替换原剧本')
+}
+
+function goStoryboard() {
+  if (isEpisodeMode.value && selectedProjectId.value && selectedEpisodeId.value) {
+    router.push(`/storyboard?projectId=${selectedProjectId.value}&episodeId=${selectedEpisodeId.value}&episodeNo=${selectedEpisodeNo.value || ''}`)
+    return
+  }
+  router.push('/storyboard')
 }
 
 async function loadHistory() {
@@ -441,18 +581,25 @@ async function handlePolish() {
 
   loading.value = true
   try {
-    const response = await polishScript({
+    const payload: ScriptPolishRequest = {
       ...form,
       project_id: selectedProjectId.value,
       language: selectedLanguage.value,
       contentPlanId: pipeline.contentPlanId,
+    }
+    if (isEpisodeMode.value && selectedEpisodeId.value) {
+      payload.episode_id = selectedEpisodeId.value
+      payload.episode_no = selectedEpisodeNo.value || currentEpisode.value?.episode_no || null
+    }
+    const response = await polishScript({
+      ...payload,
     })
     if (response.code === 0) {
       result.value = response.data
       if (response.data.recordId) pipeline.setScriptPolishId(response.data.recordId)
       displayLanguage.value = 'zh'
       await loadHistory()
-      message.success(selectedProjectId.value ? '项目级剧本打磨结果已归属到当前短剧项目。' : '项目级剧本打磨完成并保存')
+      message.success(isEpisodeMode.value ? '分集级剧本打磨完成，该集已进入 AI 分镜阶段。' : (selectedProjectId.value ? '项目级剧本打磨结果已归属到当前短剧项目。' : '项目级剧本打磨完成并保存'))
     }
   } catch {
     message.error('剧本打磨失败，请确认后端服务已启动')
@@ -468,6 +615,13 @@ onMounted(async () => {
   if (queryProjectId) {
     selectedProjectId.value = queryProjectId
     hydrateFromPipeline()
+  }
+  const queryEpisodeId = Number(route.query.episodeId)
+  const queryEpisodeNo = Number(route.query.episodeNo)
+  if (queryEpisodeId) {
+    selectedEpisodeId.value = queryEpisodeId
+    selectedEpisodeNo.value = queryEpisodeNo || null
+    await hydrateEpisodeById(queryEpisodeId)
   }
   await Promise.all([loadHistory()])
 })

@@ -1,6 +1,8 @@
 // 剧本打磨请求参数：language 保存字典 value，例如 en-US；directions 支持多个优化方向。
 export type ScriptPolishRequest = {
   project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   language?: string | null
   target_language?: string | null
   title: string
@@ -32,6 +34,9 @@ export type ScriptPolishBilingualFields = {
 // 剧本打磨返回结果：bilingual 可选，兼容旧历史数据。
 export type ScriptPolishResult = {
   recordId?: number
+  project_id?: number | null
+  episode_id?: number | null
+  episode_no?: number | null
   language?: string
   target_language?: string
   score: number

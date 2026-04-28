@@ -42,6 +42,24 @@ LANGUAGE_RULES = """
 16. 不要输出 Markdown，严格输出 JSON。
 """
 
+TARGET_MARKET_LANGUAGE_RULES = """
+【目标市场与目标语言规则】
+1. target_market 是投放地区 / 用户所在地区，不等于用户语言。
+2. target_language 是内容表达语言 / 本地化语言。
+3. 目标用户画像必须同时结合 target_market 和 target_language。
+4. 不要在 target_language=en-US 时写“华语用户”。
+5. 只有 target_language=zh-CN 时，才可使用“华语用户 / 中文用户”。
+6. target_language=en-US 时，应描述为“英语用户 / 英语短剧受众 / 北美英语受众”。
+7. target_language=ja-JP 时，应描述为“日语用户 / 日本短剧受众”。
+8. target_language=ko-KR 时，应描述为“韩语用户 / 韩国短剧受众”。
+9. target_language=th-TH 时，应描述为“泰语用户 / 泰国短剧受众”。
+10. target_language=id-ID 时，应描述为“印尼语用户 / 印尼短剧受众”。
+11. target_language=ar-SA 时，应描述为“阿拉伯语用户 / 中东短剧受众”。
+12. target_language=es-ES 时，应描述为“西语用户 / 西班牙语短剧受众”。
+示例：target_market=北美，target_language=en-US 时，应写“北美18-35岁英语短剧用户，喜欢复仇、商战、女性逆袭题材的受众”，不应写“北美18-35岁华语用户”。
+示例：target_market=北美，target_language=zh-CN 时，可以写“北美华语用户、海外华人短剧受众”。
+"""
+
 CONTENT_FIELDS = [
     "title",
     "positioning",
@@ -64,6 +82,17 @@ TARGET_LANGUAGE_NAMES = {
     "id-ID": "印尼文",
     "ar-SA": "阿拉伯文",
     "es-ES": "西班牙文",
+}
+
+AUDIENCE_LABELS_BY_LANGUAGE = {
+    "zh-CN": "华语用户 / 中文短剧受众",
+    "en-US": "英语用户 / 英语短剧受众",
+    "ja-JP": "日语用户 / 日本短剧受众",
+    "ko-KR": "韩语用户 / 韩国短剧受众",
+    "th-TH": "泰语用户 / 泰国短剧受众",
+    "id-ID": "印尼语用户 / 印尼短剧受众",
+    "ar-SA": "阿拉伯语用户 / 中东短剧受众",
+    "es-ES": "西语用户 / 西班牙语短剧受众",
 }
 
 
@@ -163,13 +192,41 @@ def target_language_name(language_code: str) -> str:
     return TARGET_LANGUAGE_NAMES.get(normalize_language_code(language_code) or language_code, language_prompt_name(language_code))
 
 
+def get_audience_label_by_language(language_code: str | None, market: str | None = None) -> str:
+    code = normalize_language_code(language_code) or language_code or "en-US"
+    label = AUDIENCE_LABELS_BY_LANGUAGE.get(code, "目标语言短剧受众")
+    if code == "en-US" and market and "北美" in market:
+        return "北美英语用户 / 北美英语短剧受众"
+    if code == "ja-JP" and market and "日本" in market:
+        return "日本日语用户 / 日本短剧受众"
+    if code == "ko-KR" and market and "韩国" in market:
+        return "韩国韩语用户 / 韩国短剧受众"
+    if code == "th-TH" and market and "泰" in market:
+        return "泰国泰语用户 / 泰国短剧受众"
+    if code == "id-ID" and market and ("印尼" in market or "东南亚" in market):
+        return "印尼语用户 / 东南亚短剧受众"
+    if code == "ar-SA" and market and "中东" in market:
+        return "中东阿拉伯语用户 / 中东短剧受众"
+    if code == "es-ES" and market and ("拉美" in market or "欧洲" in market):
+        return f"{market}西语用户 / 西班牙语短剧受众"
+    return label
+
+
+def build_fallback_target_audience(payload: ContentPlanRequest) -> str:
+    audience_label = get_audience_label_by_language(payload.language, payload.market)
+    market_prefix = f"{payload.market}18-35岁"
+    if payload.market and audience_label.startswith(payload.market):
+        audience_label = audience_label[len(payload.market):]
+    return f"{market_prefix}{audience_label}，偏好{payload.genre}、强情绪、快反转、明确爽点和可快速理解的人物关系。"
+
+
 def build_content_plan_result(payload: ContentPlanRequest) -> dict:
     # fallback 只生成结构化纯净版本，不做任何固定短句替换。
     language_code = normalize_language_code(payload.language) or payload.language
     zh = {
         "title": f"{payload.projectName} - {payload.market}{payload.duration}短剧策划",
         "positioning": f"面向{payload.market}市场的{payload.genre}竖屏短剧，内部审核版本始终使用中文，强调强冲突、快反转和清晰情绪价值。",
-        "targetAudience": "18-34岁短视频用户，偏好强情绪、快反转、明确爽点和可快速理解的人物关系。",
+        "targetAudience": build_fallback_target_audience(payload),
         "coreConflict": "主角在亲密关系或身份关系中被低估，随后用隐藏资源和关键证据完成反击，形成压迫到逆转的强对比。",
         "emotionHook": "用背叛、羞辱、误解或错失制造情绪压力，再用身份揭晓和主动反击释放情绪。",
         "openingHook": "开场三秒直接给出冲突现场：主角被当众否定，同时抛出一句带身份反转的信息。",
@@ -193,7 +250,7 @@ def build_content_plan_result(payload: ContentPlanRequest) -> dict:
 def build_user_prompt(payload: ContentPlanRequest, strict_language_retry: bool = False) -> str:
     language_code = normalize_language_code(payload.language) or payload.language
     language_name = target_language_name(language_code)
-    retry_rule = "这是一次语言校验失败后的重试，请特别检查 bilingual.zh 只能写中文，bilingual.target 只能写目标语言。" if strict_language_retry else ""
+    retry_rule = "这是一次校验失败后的重试，请特别检查 bilingual.zh 只能写中文、bilingual.target 只能写目标语言，并确保目标用户画像同时匹配 target_market 和 target_language。" if strict_language_retry else ""
     return f"""
 请根据以下用户输入生成 AI短剧内容策划方案。
 
@@ -206,11 +263,12 @@ target_language：{language_code}
 核心卖点：{payload.sellingPoint}
 
 {LANGUAGE_RULES}
+{TARGET_MARKET_LANGUAGE_RULES}
 {retry_rule}
 
 业务要求：
 1. 适合 AI短剧，结果适合后续分镜制作、分集大纲生成和广告投放。
-2. 根据目标市场做内容定位，但 bilingual.zh 始终使用中文。
+2. 根据目标市场做内容定位，但目标市场不等于目标语言，目标用户画像必须结合 target_market 和 target_language。
 3. 强调前三秒钩子、冲突、反转和情绪价值。
 
 只返回 JSON 对象，字段必须严格如下：
@@ -340,6 +398,37 @@ def validate_bilingual_plan_language(plan: dict[str, Any], target_language: str)
     return is_mostly_target_language_text(target_text, target_language)
 
 
+def audience_allows_chinese_positioning(payload: ContentPlanRequest) -> bool:
+    source = "\n".join([payload.market or "", payload.projectName or "", payload.genre or "", payload.sellingPoint or ""])
+    return any(keyword in source for keyword in ["华人", "华语", "中文", "海外华人"])
+
+
+def validate_target_audience_business(plan: dict[str, Any], payload: ContentPlanRequest) -> bool:
+    language_code = normalize_language_code(payload.language) or payload.language
+    if language_code == "zh-CN" or audience_allows_chinese_positioning(payload):
+        return True
+    bilingual = plan.get("bilingual") if isinstance(plan.get("bilingual"), dict) else {}
+    zh = bilingual.get("zh") if isinstance(bilingual.get("zh"), dict) else {}
+    audience = collect_text(zh.get("targetAudience") or plan.get("targetAudience"))
+    if not audience.strip():
+        return False
+    # 目标语言不是中文时，目标用户画像不能默认写成华语/中文/华人用户，除非输入已明确要求华人或华语定位。
+    forbidden_terms = ["华语用户", "中文用户", "华人用户", "华语受众", "中文受众", "华人受众"]
+    return not any(term in audience for term in forbidden_terms)
+
+
+def repair_target_audience(plan: dict[str, Any], payload: ContentPlanRequest) -> dict[str, Any]:
+    fixed_audience = build_fallback_target_audience(payload)
+    bilingual = plan.setdefault("bilingual", {})
+    zh = bilingual.setdefault("zh", {})
+    zh["targetAudience"] = fixed_audience
+    plan["targetAudience"] = fixed_audience
+    if (normalize_language_code(payload.language) or payload.language) == "zh-CN":
+        target = bilingual.setdefault("target", {})
+        target["targetAudience"] = fixed_audience
+    return plan
+
+
 def parse_content_plan_json(content: str) -> dict[str, Any]:
     try:
         return json.loads(content)
@@ -382,9 +471,14 @@ def generate_content_plan_with_language_guard(payload: ContentPlanRequest, fallb
             if attempt == 0:
                 continue
             return fallback_data
-        if validate_bilingual_plan_language(result, payload.language):
+        if not validate_bilingual_plan_language(result, payload.language):
+            logger.warning("内容策划语言校验失败，%s。", "已重试" if attempt == 0 else "已使用 fallback")
+            continue
+        if validate_target_audience_business(result, payload):
             return result
-        logger.warning("内容策划语言校验失败，%s。", "已重试" if attempt == 0 else "已使用 fallback")
+        logger.warning("内容策划目标用户与目标语言不匹配，%s。", "已重试" if attempt == 0 else "已修正目标用户字段")
+        if attempt == 1:
+            return repair_target_audience(result, payload)
     return fallback_data
 
 

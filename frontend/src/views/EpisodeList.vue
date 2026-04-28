@@ -332,12 +332,13 @@ const columns: DataTableColumns<ShortDramaEpisode> = [
   {
     title: '操作',
     key: 'actions',
-    width: 620,
+    width: 700,
     fixed: 'right',
     render(row) {
       return h(NSpace, { size: 6, wrap: true }, {
         default: () => [
           h(NButton, { size: 'small', secondary: true, onClick: () => openEditModal(row) }, { default: () => '编辑' }),
+          h(NButton, { size: 'small', type: 'primary', secondary: true, onClick: () => goProduction('/script-polish', row) }, { default: () => '进入剧本打磨' }),
           h(NButton, { size: 'small', secondary: true, onClick: () => goProduction('/storyboard', row) }, { default: () => '进入分镜制作' }),
           h(NButton, { size: 'small', secondary: true, onClick: () => goProduction('/storyboards', row) }, { default: () => '查看分镜任务' }),
           h(NButton, { size: 'small', secondary: true, onClick: () => goProduction('/localization', row) }, { default: () => '进入本地化' }),

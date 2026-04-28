@@ -12,6 +12,8 @@ class ScriptPolish(Base):
     id = Column(Integer, primary_key=True, index=True)
     # project_id 用于把 AI 生成结果绑定到短剧项目，当前先做弱关联，后续可升级为外键约束。
     project_id = Column(Integer, nullable=True, index=True)
+    episode_id = Column(Integer, nullable=True, index=True)
+    episode_no = Column(Integer, nullable=True, index=True)
     content_plan_id = Column(Integer, nullable=True)
     # language 保存字典 value，例如 en-US；展示名称由前端字典转换。
     language = Column(String(50), nullable=True)
