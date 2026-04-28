@@ -196,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, h, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import { getEpisodeDetail } from '../api/episodes'
@@ -237,6 +237,8 @@ const pipeline = usePipelineStore()
 const selectedProjectId = ref<number | null>(null)
 const episodeId = ref<number | null>(null)
 const episodeNo = ref<number | null>(null)
+const restoringHistory = ref(false)
+const restoredHistoryContext = ref<{ projectId: number | null; episodeId: number | null } | null>(null)
 const currentProject = ref<ShortDramaProject | null>(null)
 const currentEpisode = ref<ShortDramaEpisode | null>(null)
 const touchedInputs = reactive<Record<'title' | 'script', boolean>>({
@@ -279,6 +281,9 @@ function setInputHydrateTip(type: typeof inputHydrateTip.type, messageText: stri
 
 function handleProjectChange(project: ShortDramaProject | null) {
   currentProject.value = project
+  if (restoringHistory.value) return
+  if (restoredHistoryContext.value?.projectId && project?.id === restoredHistoryContext.value.projectId) return
+  restoredHistoryContext.value = null
   loadHistory()
 }
 
@@ -286,6 +291,9 @@ async function handleEpisodeChange(episode: ShortDramaEpisode | null) {
   episodeId.value = episode?.id || null
   episodeNo.value = episode?.episode_no || null
   currentEpisode.value = episode
+  if (restoringHistory.value) return
+  if (restoredHistoryContext.value?.episodeId && episode?.id === restoredHistoryContext.value.episodeId) return
+  restoredHistoryContext.value = null
   if (episode) await hydrateStoryboardInput(episode)
   loadHistory()
 }
@@ -353,6 +361,22 @@ function readNestedText(source: unknown, paths: string[][]): string {
     if (typeof cursor === 'string' && cursor.trim()) return cursor
   }
   return typeof normalized === 'string' && normalized.trim() ? normalized : ''
+}
+
+function readNestedValue(source: unknown, paths: string[][]): unknown {
+  const normalized = parseMaybeJson(source)
+  for (const path of paths) {
+    let cursor: unknown = normalized
+    for (const key of path) {
+      if (!cursor || typeof cursor !== 'object') {
+        cursor = undefined
+        break
+      }
+      cursor = (cursor as Record<string, unknown>)[key]
+    }
+    if (cursor !== undefined && cursor !== null) return cursor
+  }
+  return undefined
 }
 
 function hasChineseText(text: string): boolean {
@@ -423,6 +447,44 @@ function extractPolishTitle(record: ScriptPolishHistoryItem, episode?: ShortDram
     || readNestedText(record as unknown, [['title'], ['script_title']])
     || readNestedText(record.result as unknown, [['title'], ['scriptTitle']])
     || formatEpisodeTitle(episode)
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function extractStoryboardInputFromRecord(record: StoryboardHistoryItem) {
+  const resultData = parseMaybeJson(record.result) as Record<string, unknown> | string
+  const title = readNestedText(record as unknown, [['title'], ['script_title']])
+    || readNestedText(resultData, [['title'], ['scriptTitle'], ['meta', 'title']])
+    || form.title
+  const script = readNestedText(record as unknown, [['script'], ['script_text'], ['original_script']])
+    || readNestedText(resultData, [['script'], ['inputScript'], ['originalScript'], ['meta', 'scriptText']])
+    || form.script
+  const style = readNestedText(record as unknown, [['style'], ['visual_style']])
+    || readNestedText(resultData, [['style'], ['visualStyle'], ['meta', 'style']])
+    || form.style
+  const resultScenes = (resultData as Record<string, unknown>)?.scenes
+  const sceneCount = toNumber((record as unknown as Record<string, unknown>).scene_count)
+    || toNumber((record as unknown as Record<string, unknown>).shot_count)
+    || toNumber(record.sceneCount)
+    || toNumber(readNestedValue(resultData, [['sceneCount'], ['shotCount']]))
+    || (Array.isArray(resultScenes) ? resultScenes.length : null)
+    || form.sceneCount
+  return { title, script, style, sceneCount }
+}
+
+function syncStoryboardUrl(record: StoryboardHistoryItem) {
+  const query: Record<string, string> = {}
+  if (record.project_id) query.projectId = String(record.project_id)
+  if (record.episode_id) query.episodeId = String(record.episode_id)
+  if (record.episode_no) query.episodeNo = String(record.episode_no)
+  router.replace({ path: route.path, query })
 }
 
 function formatEpisodeTitle(episode?: ShortDramaEpisode | null) {
@@ -534,13 +596,35 @@ function formatTime(value: string) {
   return new Date(value).toLocaleString()
 }
 
-function selectHistory(item: StoryboardHistoryItem) {
-  result.value = item.result
-  if (item.contentPlanId) pipeline.setContentPlanId(item.contentPlanId)
-  if (item.scriptPolishId) pipeline.setScriptPolishId(item.scriptPolishId)
-  pipeline.setStoryboardId(item.recordId || item.id)
-  displayLanguage.value = 'zh'
-  message.success('已加载历史分镜结果')
+async function selectHistory(item: StoryboardHistoryItem) {
+  restoringHistory.value = true
+  try {
+    const input = extractStoryboardInputFromRecord(item)
+    result.value = item.result
+    selectedProjectId.value = item.project_id || null
+    episodeId.value = item.episode_id || null
+    episodeNo.value = item.episode_no || null
+    restoredHistoryContext.value = { projectId: selectedProjectId.value, episodeId: episodeId.value }
+    currentEpisode.value = null
+    touchedInputs.title = false
+    touchedInputs.script = false
+    form.title = input.title
+    form.script = input.script
+    form.style = input.style
+    form.sceneCount = input.sceneCount
+    if (item.contentPlanId) pipeline.setContentPlanId(item.contentPlanId)
+    if (item.scriptPolishId) pipeline.setScriptPolishId(item.scriptPolishId)
+    pipeline.setStoryboardId(item.recordId || item.id)
+    displayLanguage.value = 'zh'
+    syncStoryboardUrl(item)
+    await nextTick()
+    setInputHydrateTip(
+      item.project_id || item.episode_id ? 'success' : 'info',
+      item.project_id || item.episode_id ? '已恢复该分镜任务的项目、分集和输入内容。' : '已加载历史分镜结果，该记录未绑定项目或分集。',
+    )
+  } finally {
+    restoringHistory.value = false
+  }
 }
 
 async function copyText(text: string, successText: string) {
