@@ -1,6 +1,8 @@
 import request from '../utils/request'
 import type { ApiResponse } from '../types/common'
 import type {
+  EpisodeOutlineGeneratePayload,
+  EpisodeOutlineGenerateResponse,
   ShortDramaEpisode,
   ShortDramaEpisodeCreate,
   ShortDramaEpisodeListParams,
@@ -36,4 +38,9 @@ export function archiveEpisode(episodeId: number | string) {
 // 根据项目计划集数批量生成分集骨架。
 export function batchGenerateEpisodes(projectId: number | string) {
   return request.post<unknown, ApiResponse<ShortDramaEpisodeListResponse>>(`/projects/${projectId}/episodes/batch-generate`)
+}
+
+// 从内容策划结果生成分集大纲初稿，生成后仍在分集管理页逐集调整。
+export function generateEpisodeOutline(projectId: number | string, data: EpisodeOutlineGeneratePayload) {
+  return request.post<unknown, ApiResponse<EpisodeOutlineGenerateResponse>>(`/projects/${projectId}/episodes/generate-outline`, data)
 }

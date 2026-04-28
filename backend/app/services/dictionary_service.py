@@ -55,6 +55,36 @@ DICTIONARIES = {
     ],
 }
 
+LANGUAGE_CODE_ALIASES = {
+    "中文": "zh-CN",
+    "汉语": "zh-CN",
+    "英文": "en-US",
+    "英语": "en-US",
+    "日文": "ja-JP",
+    "日语": "ja-JP",
+    "韩文": "ko-KR",
+    "韩语": "ko-KR",
+    "泰文": "th-TH",
+    "泰语": "th-TH",
+    "印尼文": "id-ID",
+    "印尼语": "id-ID",
+    "阿拉伯文": "ar-SA",
+    "阿拉伯语": "ar-SA",
+    "西班牙文": "es-ES",
+    "西班牙语": "es-ES",
+}
+
+LANGUAGE_PROMPT_NAMES = {
+    "zh-CN": "中文",
+    "en-US": "英文",
+    "ja-JP": "日文",
+    "ko-KR": "韩文",
+    "th-TH": "泰文",
+    "id-ID": "印尼文",
+    "ar-SA": "阿拉伯文",
+    "es-ES": "西班牙文",
+}
+
 
 def get_all_dictionaries():
     return DICTIONARIES
@@ -62,3 +92,25 @@ def get_all_dictionaries():
 
 def get_dictionary(dict_type: str):
     return DICTIONARIES.get(dict_type)
+
+
+def normalize_language_code(value: str | None) -> str | None:
+    # 语言主字段统一保存字典 value；旧数据中的中文展示名在接口返回前规范化。
+    if value is None:
+        return None
+
+    normalized_value = value.strip()
+    if not normalized_value:
+        return normalized_value
+
+    language_values = {item["value"] for item in DICTIONARIES["languages"]}
+    if normalized_value in language_values:
+        return normalized_value
+
+    return LANGUAGE_CODE_ALIASES.get(normalized_value, normalized_value)
+
+
+def language_prompt_name(value: str | None) -> str:
+    # Prompt 中才使用中文语言名，避免把“英文”这类展示名写入主存储字段。
+    language_code = normalize_language_code(value)
+    return LANGUAGE_PROMPT_NAMES.get(language_code or "", value or "英文")

@@ -8,12 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.ad_material import AdMaterial
+from app.models.content_plan import ContentPlan
 from app.models.localization import Localization
 from app.models.media_asset import MediaAsset
 from app.models.short_drama_episode import ShortDramaEpisode
 from app.models.short_drama_project import ShortDramaProject
 from app.models.storyboard import Storyboard
-from app.schemas.episode import ShortDramaEpisodeCreate, ShortDramaEpisodeUpdate
+from app.schemas.episode import EpisodeOutlineGenerateRequest, ShortDramaEpisodeCreate, ShortDramaEpisodeUpdate
+from app.services.episode_outline_service import generate_episode_outline_items
 
 
 router = APIRouter()
@@ -173,6 +175,84 @@ def batch_generate_project_episodes(project_id: int, db: Session = Depends(get_d
     for episode in episodes:
         db.refresh(episode)
     return {"code": 0, "message": "success", "data": {"items": [episode_to_dict(item) for item in episodes], "total": len(episodes)}}
+
+
+@router.post("/projects/{project_id}/episodes/generate-outline")
+def generate_project_episode_outline(project_id: int, payload: EpisodeOutlineGenerateRequest, db: Session = Depends(get_db)):
+    # 分集大纲由项目级内容策划拆解而来，写入 Episode 表后可在分集管理页逐集调整。
+    project = get_project_or_404(project_id, db)
+    if payload.episode_count < 1 or payload.episode_count > 30:
+        raise HTTPException(status_code=400, detail="生成集数需在 1～30 之间")
+    if payload.start_episode_no < 1:
+        raise HTTPException(status_code=400, detail="起始集数不能小于 1")
+
+    content_plan = None
+    if payload.content_plan_id:
+        content_plan = db.query(ContentPlan).filter(ContentPlan.id == payload.content_plan_id).first()
+        if not content_plan or content_plan.project_id != project_id:
+            raise HTTPException(status_code=404, detail="内容策划记录不存在或不属于当前项目")
+    else:
+        content_plan = db.query(ContentPlan).filter(
+            ContentPlan.project_id == project_id,
+        ).order_by(ContentPlan.created_at.desc()).first()
+
+    outline_items, generation_source = generate_episode_outline_items(project, content_plan, payload.episode_count, payload.start_episode_no)
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    episodes: list[ShortDramaEpisode] = []
+
+    for item in outline_items:
+        episode = db.query(ShortDramaEpisode).filter(
+            ShortDramaEpisode.project_id == project_id,
+            ShortDramaEpisode.episode_no == item["episode_no"],
+        ).first()
+        if episode and not payload.overwrite:
+            skipped_count += 1
+            episodes.append(episode)
+            continue
+
+        if episode:
+            episode.title = item["title"]
+            episode.summary = item["summary"]
+            episode.stage = "scripting"
+            episode.status = "active"
+            episode.updated_at = datetime.now()
+            updated_count += 1
+        else:
+            episode = ShortDramaEpisode(
+                project_id=project_id,
+                episode_no=item["episode_no"],
+                title=item["title"],
+                summary=item["summary"],
+                stage="scripting",
+                status="active",
+                script_status="pending",
+                storyboard_status="pending",
+                localization_status="pending",
+                media_status="pending",
+            )
+            db.add(episode)
+            created_count += 1
+        episodes.append(episode)
+
+    db.commit()
+    for episode in episodes:
+        db.refresh(episode)
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "project_id": project_id,
+            "content_plan_id": content_plan.id if content_plan else None,
+            "generation_source": generation_source,
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "skipped_count": skipped_count,
+            "items": [episode_to_dict(item) for item in episodes],
+        },
+    }
 
 
 @router.get("/episodes/{episode_id}")

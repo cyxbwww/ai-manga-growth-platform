@@ -17,16 +17,32 @@
 
             <n-form :model="form" label-placement="top">
               <n-form-item label="所属短剧项目">
-                <ProjectPicker v-model="selectedProjectId" placeholder="建议选择短剧项目，方便沉淀到项目级规划链路" />
+                <ProjectPicker
+                  v-model="selectedProjectId"
+                  placeholder="建议选择短剧项目，方便沉淀到项目级规划链路"
+                  @change="handleProjectChange"
+                />
               </n-form-item>
               <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
                 返回项目详情
               </n-button>
+              <n-alert v-if="contentPlanTip.message" :type="contentPlanTip.type" :bordered="false" class="pipeline-tip">
+                {{ contentPlanTip.message }}
+              </n-alert>
               <n-form-item label="剧本标题">
-                <n-input v-model:value="form.title" placeholder="例如：她在婚礼当天醒悟" />
+                <n-input
+                  v-model:value="form.title"
+                  placeholder="例如：她在婚礼当天醒悟"
+                  @update:value="markFieldTouched('title')"
+                />
               </n-form-item>
               <n-form-item label="原始剧本文本">
-                <n-input v-model:value="form.script" type="textarea" :autosize="{ minRows: 10, maxRows: 16 }" />
+                <n-input
+                  v-model:value="form.script"
+                  type="textarea"
+                  :autosize="{ minRows: 10, maxRows: 16 }"
+                  @update:value="markFieldTouched('script')"
+                />
               </n-form-item>
               <n-form-item label="打磨方向">
                 <n-checkbox-group v-model:value="form.directions">
@@ -48,7 +64,10 @@
               <n-list-item v-for="item in history" :key="item.id" @click="selectHistory(item)">
                 <n-thing :title="item.title" :description="formatTime(item.createdAt)">
                   <template #header-extra>
-                    <n-tag type="warning" bordered>{{ item.result.score }}分</n-tag>
+                    <n-space size="small">
+                      <n-tag type="success" bordered>{{ getLabel('languages', item.language || item.target_language) }}</n-tag>
+                      <n-tag type="warning" bordered>{{ item.result.score }}分</n-tag>
+                    </n-space>
                   </template>
                 </n-thing>
               </n-list-item>
@@ -173,17 +192,27 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
+import { getContentPlanHistory } from '../api/content'
 import { getPipelineDetail } from '../api/pipeline'
 import { getScriptPolishHistory, polishScript } from '../api/script'
 import ProjectPicker from '../components/ProjectPicker.vue'
+import { useDictionaries } from '../composables/useDictionaries'
 import { usePipelineStore } from '../stores/pipeline'
+import type { ContentPlanHistoryItem } from '../types/content'
 import type { ScriptPolishBilingualFields, ScriptPolishHistoryItem, ScriptPolishRequest, ScriptPolishResult } from '../types/script'
+import type { ShortDramaProject } from '../types/project'
 
-const form = reactive<ScriptPolishRequest>({
+type ProjectChangePayload = ShortDramaProject & {
+  primary_language?: string
+}
+
+const defaultForm: ScriptPolishRequest = {
   title: '她在婚礼当天醒悟',
   script: '女主站在婚礼现场，发现未婚夫和继妹早已联手骗走她的公司。她没有哭，只是拿出一份合同，说真正的控股人是她。全场安静，未婚夫慌了。',
   directions: ['强化前三秒钩子', '增强冲突', '加强反转', '适配海外表达'],
-})
+}
+
+const form = reactive<ScriptPolishRequest>(defaultForm)
 
 const loading = ref(false)
 const result = ref<ScriptPolishResult | null>(null)
@@ -193,7 +222,17 @@ const message = useMessage()
 const route = useRoute()
 const router = useRouter()
 const pipeline = usePipelineStore()
+const { getLabel, loadDictionaries } = useDictionaries()
 const selectedProjectId = ref<number | null>(null)
+const selectedLanguage = ref('en-US')
+const contentPlanTip = reactive<{ type: 'success' | 'info' | 'warning' | 'error', message: string }>({
+  type: 'info',
+  message: '',
+})
+const touchedFields = reactive<Record<'title' | 'script', boolean>>({
+  title: false,
+  script: false,
+})
 
 const scriptView = computed<ScriptPolishBilingualFields>(() => {
   // 旧历史数据没有 bilingual 时，继续使用顶层中文字段展示。
@@ -249,6 +288,103 @@ function formatTime(value: string) {
   return new Date(value).toLocaleString()
 }
 
+function markFieldTouched(field: keyof typeof touchedFields) {
+  touchedFields[field] = true
+}
+
+function shouldHydrateField(field: keyof typeof touchedFields, currentValue?: string | null) {
+  return !touchedFields[field] || !String(currentValue || '').trim()
+}
+
+function hydrateField(field: keyof ScriptPolishRequest, value?: string | null) {
+  if (!value) return
+  if (field === 'title' && shouldHydrateField('title', form.title)) form.title = value
+  if (field === 'script' && shouldHydrateField('script', form.script)) form.script = value
+}
+
+function setContentPlanTip(type: typeof contentPlanTip.type, message: string) {
+  contentPlanTip.type = type
+  contentPlanTip.message = message
+}
+
+function formatPlanValue(value: unknown) {
+  if (Array.isArray(value)) return value.join('\n')
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
+}
+
+function readPlanField(result: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+    if (value !== undefined && value !== null && formatPlanValue(value).trim()) return formatPlanValue(value)
+  }
+  return ''
+}
+
+function appendSection(sections: string[], title: string, content?: string | null) {
+  const text = (content || '').trim()
+  if (text) sections.push(`【${title}】\n${text}`)
+}
+
+function buildScriptInputFromContentPlan(plan: ContentPlanHistoryItem) {
+  const rawResult = plan.result
+  if (typeof rawResult === 'string') {
+    return `${rawResult}\n\n请基于以上内容进行剧本打磨。`
+  }
+
+  const result = rawResult && typeof rawResult === 'object' ? rawResult as Record<string, unknown> : {}
+  const sections: string[] = []
+  appendSection(sections, '项目名称', plan.projectName || readPlanField(result, ['title']))
+  appendSection(sections, '故事定位', readPlanField(result, ['positioning', 'storyPositioning', '故事定位']))
+  appendSection(sections, '目标用户', readPlanField(result, ['targetAudience', '目标用户']))
+  appendSection(sections, '核心冲突', readPlanField(result, ['coreConflict', '核心冲突']))
+  appendSection(sections, '情绪钩子', readPlanField(result, ['emotionHook', 'emotionalHook', '情绪钩子']))
+  appendSection(sections, '前三秒开场建议', readPlanField(result, ['openingHook', 'threeSecondHook', '3秒开头建议', '前三秒开场建议']))
+  appendSection(sections, '爽点/泪点/反转点', readPlanField(result, ['highlights', 'sellingPoints', '爽点', '泪点', '反转点']))
+  appendSection(sections, '投放平台', readPlanField(result, ['platforms', '适合投放平台']))
+  appendSection(sections, 'AI策划建议', readPlanField(result, ['suggestions', 'aiSuggestions', 'AI策划建议']))
+  appendSection(sections, '剧本打磨要求', '请基于以上内容，优化短剧的开场钩子、冲突节奏、人物动机、台词表达和每集结尾悬念。')
+  return sections.join('\n\n')
+}
+
+async function hydrateScriptFromLatestContentPlan(project: ProjectChangePayload) {
+  if (touchedFields.script) {
+    setContentPlanTip('warning', '已选择项目，当前原始文本已手动编辑，未覆盖。')
+    return
+  }
+
+  try {
+    const response = await getContentPlanHistory({ project_id: project.id, limit: 1 })
+    const latestPlan = response.code === 0 ? response.data[0] : undefined
+    if (latestPlan) {
+      form.script = buildScriptInputFromContentPlan(latestPlan)
+      if (latestPlan.recordId || latestPlan.id) pipeline.setContentPlanId(latestPlan.recordId || latestPlan.id)
+      setContentPlanTip('success', '已引用该项目最近一次内容策划结果。')
+      return
+    }
+
+    form.script = project.description || ''
+    setContentPlanTip('info', '未找到内容策划结果，已使用项目简介作为剧本打磨输入。')
+  } catch {
+    form.script = project.description || ''
+    setContentPlanTip('warning', '内容策划查询失败，已使用项目简介兜底。')
+  }
+}
+
+async function handleProjectChange(project: ProjectChangePayload | null) {
+  if (!project) {
+    selectedLanguage.value = 'en-US'
+    contentPlanTip.message = ''
+    return
+  }
+  selectedLanguage.value = project.primary_language || project.language || 'en-US'
+  // 选择项目后仅同步未手动编辑过的输入，避免覆盖编剧已经补充的标题和剧本文本。
+  hydrateField('title', project.name)
+  await hydrateScriptFromLatestContentPlan(project)
+  message.success('已同步短剧项目基础信息。')
+}
+
 function selectHistory(item: ScriptPolishHistoryItem) {
   result.value = item.result
   if (item.contentPlanId) pipeline.setContentPlanId(item.contentPlanId)
@@ -268,6 +404,7 @@ async function copyPolishedScript() {
 
 function replaceOriginalScript() {
   form.script = scriptView.value.polishedScript
+  markFieldTouched('script')
   message.success('已用优化剧本替换原剧本')
 }
 
@@ -304,7 +441,12 @@ async function handlePolish() {
 
   loading.value = true
   try {
-    const response = await polishScript({ ...form, project_id: selectedProjectId.value, contentPlanId: pipeline.contentPlanId })
+    const response = await polishScript({
+      ...form,
+      project_id: selectedProjectId.value,
+      language: selectedLanguage.value,
+      contentPlanId: pipeline.contentPlanId,
+    })
     if (response.code === 0) {
       result.value = response.data
       if (response.data.recordId) pipeline.setScriptPolishId(response.data.recordId)
@@ -320,10 +462,14 @@ async function handlePolish() {
 }
 
 onMounted(async () => {
+  await loadDictionaries()
   // 从项目详情页进入时，先写入 projectId，ProjectPicker 会负责加载并回显项目信息。
   const queryProjectId = Number(route.query.projectId)
-  if (queryProjectId) selectedProjectId.value = queryProjectId
-  await Promise.all([loadHistory(), hydrateFromPipeline()])
+  if (queryProjectId) {
+    selectedProjectId.value = queryProjectId
+    hydrateFromPipeline()
+  }
+  await Promise.all([loadHistory()])
 })
 </script>
 

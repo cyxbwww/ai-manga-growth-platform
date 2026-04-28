@@ -54,3 +54,21 @@ class ShortDramaEpisodeListResponse(BaseModel):
     # 列表返回 items + total，后续可直接接分页器。
     items: list[ShortDramaEpisodeOut]
     total: int
+
+
+class EpisodeOutlineGenerateRequest(BaseModel):
+    # 分集大纲生成请求：基于项目级内容策划拆解到 Episode 表，生成后仍可逐集编辑。
+    content_plan_id: Optional[int] = None
+    episode_count: int = 10
+    start_episode_no: int = 1
+    overwrite: bool = False
+
+
+class EpisodeOutlineGenerateResponse(BaseModel):
+    project_id: int
+    content_plan_id: Optional[int] = None
+    generation_source: str = "rule_fallback"
+    created_count: int
+    updated_count: int
+    skipped_count: int
+    items: list[ShortDramaEpisodeOut]

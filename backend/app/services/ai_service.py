@@ -1,4 +1,5 @@
 import json
+import logging
 
 from openai import OpenAI
 
@@ -13,15 +14,17 @@ from app.core.config import (
 )
 
 
-def generate_json(system_prompt: str, user_prompt: str, fallback_data: dict) -> dict:
-    # mock 模式强制不调用外部模型，保证面试演示和本地开发稳定可用。
+logger = logging.getLogger(__name__)
+
+
+def request_ai_text(system_prompt: str, user_prompt: str, response_format_json: bool = True) -> tuple[str | None, str | None]:
+    # 统一复用 DeepSeek/OpenAI 兼容调用封装；业务层根据 error 决定是否走 fallback。
     if AI_PROVIDER != "deepseek":
-        return fallback_data
+        return None, f"AI_PROVIDER={AI_PROVIDER}"
 
     if not AI_API_KEY:
-        # 不打印或返回真实 Key，只提示当前走 fallback。
-        print("未配置 AI_API_KEY，使用 mock fallback")
-        return fallback_data
+        # 不打印或返回真实 Key，只记录缺少配置。
+        return None, "AI_API_KEY is empty"
 
     try:
         # DeepSeek 兼容 OpenAI SDK，通过 base_url 指向 DeepSeek API。
@@ -38,17 +41,25 @@ def generate_json(system_prompt: str, user_prompt: str, fallback_data: dict) -> 
             ],
             temperature=AI_TEMPERATURE,
             max_tokens=AI_MAX_TOKENS,
-            response_format={"type": "json_object"},
+            response_format={"type": "json_object"} if response_format_json else None,
         )
         content = response.choices[0].message.content
         if not content:
-            print("DeepSeek 返回内容为空，使用 mock fallback")
-            return fallback_data
+            return None, "DeepSeek returned empty content"
+        return content, None
+    except Exception as exc:
+        return None, str(exc)
 
+
+def generate_json(system_prompt: str, user_prompt: str, fallback_data: dict) -> dict:
+    # mock 模式或 DeepSeek 异常时强制使用 fallback，保证面试演示和本地开发稳定可用。
+    content, error = request_ai_text(system_prompt, user_prompt, response_format_json=True)
+    if error or not content:
+        logger.warning("DeepSeek unavailable, using mock fallback: %s", error)
+        return fallback_data
+
+    try:
         return json.loads(content)
     except json.JSONDecodeError as exc:
-        print(f"DeepSeek JSON 解析失败，使用 mock fallback: {exc}")
-        return fallback_data
-    except Exception as exc:
-        print(f"DeepSeek 调用失败，使用 mock fallback: {exc}")
+        logger.warning("DeepSeek JSON parse failed, using mock fallback: %s", exc)
         return fallback_data

@@ -1,6 +1,8 @@
-// 剧本打磨请求参数：directions 支持多个优化方向，可携带内容策划 ID。
+// 剧本打磨请求参数：language 保存字典 value，例如 en-US；directions 支持多个优化方向。
 export type ScriptPolishRequest = {
   project_id?: number | null
+  language?: string | null
+  target_language?: string | null
   title: string
   script: string
   directions: string[]
@@ -30,6 +32,8 @@ export type ScriptPolishBilingualFields = {
 // 剧本打磨返回结果：bilingual 可选，兼容旧历史数据。
 export type ScriptPolishResult = {
   recordId?: number
+  language?: string
+  target_language?: string
   score: number
   diagnostics: ScriptDiagnostic[]
   polishedScript: string
@@ -47,6 +51,8 @@ export type ScriptPolishResult = {
 export type ScriptPolishHistoryItem = ScriptPolishRequest & {
   id: number
   recordId?: number
+  language?: string | null
+  target_language?: string | null
   result: ScriptPolishResult
   createdAt: string
 }

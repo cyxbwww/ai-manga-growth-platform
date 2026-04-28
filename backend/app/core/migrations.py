@@ -22,6 +22,7 @@ def ensure_pipeline_columns(engine) -> None:
 
     ensure_column(engine, "script_polishes", "project_id", "INTEGER")
     ensure_column(engine, "script_polishes", "content_plan_id", "INTEGER")
+    ensure_column(engine, "script_polishes", "language", "VARCHAR(50)")
 
     ensure_column(engine, "storyboards", "project_id", "INTEGER")
     ensure_column(engine, "storyboards", "episode_id", "INTEGER")

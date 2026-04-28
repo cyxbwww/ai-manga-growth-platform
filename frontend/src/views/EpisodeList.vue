@@ -46,8 +46,11 @@
       </div>
     </n-card>
 
-    <n-modal v-model:show="showModal" preset="card" :title="editingId ? '编辑分集' : '新增分集'" class="episode-modal">
+    <n-modal v-model:show="showModal" preset="card" :title="editingId ? '编辑分集大纲' : '新增分集'" class="episode-modal">
       <n-form :model="form" label-placement="top">
+        <n-alert v-if="editingId" type="info" :bordered="false" class="outline-edit-tip">
+          AI 生成的分集大纲为初稿，可在这里逐集调整后再进入剧本打磨、AI分镜和本地化生产。
+        </n-alert>
         <n-grid :cols="2" :x-gap="16">
           <n-form-item-gi label="集数">
             <n-input-number v-model:value="form.episode_no" :min="1" :max="500" class="full-width" />
@@ -75,7 +78,7 @@
           </n-form-item-gi>
         </n-grid>
         <n-form-item label="剧情摘要">
-          <n-input v-model:value="form.summary" type="textarea" :autosize="{ minRows: 3, maxRows: 5 }" placeholder="请输入本集剧情摘要" />
+          <n-input v-model:value="form.summary" type="textarea" :autosize="{ minRows: 3, maxRows: 5 }" placeholder="可包含本集剧情推进、核心冲突、开场钩子和结尾悬念。" />
         </n-form-item>
       </n-form>
 
@@ -534,6 +537,14 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.5;
   word-break: break-word;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.outline-edit-tip {
+  margin-bottom: 14px;
 }
 
 .episode-page :deep(.asset-tag) {

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.script_polish import ScriptPolish
 from app.services.ai_service import generate_json
+from app.services.dictionary_service import language_prompt_name, normalize_language_code
 from app.services.project_flow import advance_project_stage
 
 
@@ -31,10 +32,15 @@ class ScriptPolishRequest(BaseModel):
     script: str
     directions: list[str]
     contentPlanId: Optional[int] = None
+    # language 保存和传递字典 value，例如 en-US；Prompt 中再临时转成中文语言名。
+    language: Optional[str] = None
+    target_language: Optional[str] = None
 
 
 def build_script_polish_result(payload: ScriptPolishRequest) -> dict:
     # mock 打磨逻辑：原字段保留中文，bilingual.target 预留给海外投放表达。
+    language_code = script_language_code(payload)
+    language_name = language_prompt_name(language_code)
     directions_text = "、".join(payload.directions) if payload.directions else "基础节奏优化"
     zh_polished = (
         f"《{payload.title}》优化片段\n"
@@ -96,19 +102,33 @@ def build_script_polish_result(payload: ScriptPolishRequest) -> dict:
         "optimizationTips": zh_tips,
         "bilingual": {
             "zh": {"polishedScript": zh_polished, "optimizationTips": zh_tips},
-            "target": {"language": "英文", "polishedScript": target_polished, "optimizationTips": target_tips},
+            "target": {"language": language_name, "polishedScript": target_polished, "optimizationTips": target_tips},
         },
     }
 
 
+def script_language_code(payload: ScriptPolishRequest) -> str:
+    return normalize_language_code(payload.language or payload.target_language) or "en-US"
+
+
+def infer_language_from_result(result: dict) -> str:
+    target_language = None
+    bilingual = result.get("bilingual") if isinstance(result, dict) else None
+    if isinstance(bilingual, dict) and isinstance(bilingual.get("target"), dict):
+        target_language = bilingual["target"].get("language")
+    return normalize_language_code(target_language) or "en-US"
+
+
 def build_user_prompt(payload: ScriptPolishRequest) -> str:
-    # 剧本打磨没有单独语言字段，默认要求模型给出中文审核版和英文海外表达版。
+    # 主存储字段使用语言 code；Prompt 临时转成中文语言名，便于模型理解目标表达。
+    language_code = script_language_code(payload)
+    language_name = language_prompt_name(language_code)
     return f"""
 请对以下 AI短剧剧本进行精品化打磨：
 剧本标题：{payload.title}
 原始剧本：{payload.script}
 打磨方向：{json.dumps(payload.directions, ensure_ascii=False)}
-目标语言：英文
+目标语言：{language_name}
 
 要求：
 1. 诊断节奏、冲突、反转、情绪张力。
@@ -124,7 +144,7 @@ def build_user_prompt(payload: ScriptPolishRequest) -> str:
   "optimizationTips": ["string"],
   "bilingual": {{
     "zh": {{"polishedScript": "string", "optimizationTips": ["string"]}},
-    "target": {{"language": "英文", "polishedScript": "string", "optimizationTips": ["string"]}}
+    "target": {{"language": "{language_name}", "polishedScript": "string", "optimizationTips": ["string"]}}
   }}
 }}
 """
@@ -132,12 +152,14 @@ def build_user_prompt(payload: ScriptPolishRequest) -> str:
 
 @router.post("/polish")
 def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
+    language_code = script_language_code(payload)
     fallback_data = build_script_polish_result(payload)
     result = generate_json(SYSTEM_PROMPT, build_user_prompt(payload), fallback_data)
 
     record = ScriptPolish(
         project_id=payload.project_id,
         content_plan_id=payload.contentPlanId,
+        language=language_code,
         title=payload.title,
         original_script=payload.script,
         directions_json=json.dumps(payload.directions, ensure_ascii=False),
@@ -148,24 +170,37 @@ def polish_script(payload: ScriptPolishRequest, db: Session = Depends(get_db)):
     db.refresh(record)
     advance_project_stage(db, payload.project_id, "storyboard")
 
-    return {"code": 0, "message": "success", "data": {"recordId": record.id, "project_id": payload.project_id, **result}}
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "recordId": record.id,
+            "project_id": payload.project_id,
+            "language": language_code,
+            "target_language": language_code,
+            **result,
+        },
+    }
 
 
 @router.get("/polishes")
 def get_script_polish_history(db: Session = Depends(get_db)):
     records = db.query(ScriptPolish).order_by(ScriptPolish.created_at.desc()).limit(20).all()
-    data = [
-        {
+    data = []
+    for item in records:
+        result = json.loads(item.result_json)
+        language_code = normalize_language_code(item.language) or infer_language_from_result(result)
+        data.append({
             "id": item.id,
             "recordId": item.id,
             "project_id": item.project_id,
             "contentPlanId": item.content_plan_id,
+            "language": language_code,
+            "target_language": language_code,
             "title": item.title,
             "script": item.original_script,
             "directions": json.loads(item.directions_json),
-            "result": json.loads(item.result_json),
+            "result": result,
             "createdAt": item.created_at.isoformat(),
-        }
-        for item in records
-    ]
+        })
     return {"code": 0, "message": "success", "data": data}

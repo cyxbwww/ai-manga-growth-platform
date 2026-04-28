@@ -75,6 +75,10 @@ import { getProjectDetail, getProjects } from '../api/projects'
 import { useDictionaries } from '../composables/useDictionaries'
 import type { ShortDramaProject, ShortDramaProjectStage, ShortDramaProjectStatus } from '../types/project'
 
+type ProjectPickerChangePayload = ShortDramaProject & {
+  primary_language?: string
+}
+
 const props = withDefaults(defineProps<{
   modelValue: number | null
   placeholder?: string
@@ -88,7 +92,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: number | null): void
-  (event: 'change', value: ShortDramaProject | null): void
+  (event: 'change', value: ProjectPickerChangePayload | null): void
 }>()
 
 const message = useMessage()
@@ -122,17 +126,26 @@ function formatTime(value: string) {
   return new Date(value).toLocaleString()
 }
 
+function emitProjectChange(project: ShortDramaProject | null) {
+  if (!project) {
+    emit('change', null)
+    return
+  }
+  // change 事件返回完整项目对象，并补充 primary_language 兼容字段，方便业务页直接回填表单。
+  emit('change', { ...project, primary_language: project.language })
+}
+
 function selectProject(row: ShortDramaProject) {
   selectedProject.value = row
   emit('update:modelValue', row.id)
-  emit('change', row)
+  emitProjectChange(row)
   showModal.value = false
 }
 
 function clearProject() {
   selectedProject.value = null
   emit('update:modelValue', null)
-  emit('change', null)
+  emitProjectChange(null)
 }
 
 async function loadProjects() {
@@ -162,11 +175,11 @@ async function loadSelectedProject(id: number) {
     const response = await getProjectDetail(id)
     if (response.code === 0) {
       selectedProject.value = response.data
-      emit('change', response.data)
+      emitProjectChange(response.data)
     }
   } catch {
     selectedProject.value = null
-    emit('change', null)
+    emitProjectChange(null)
     message.warning('未找到对应短剧项目，可手动选择。')
   }
 }
@@ -228,7 +241,7 @@ watch(
   (value) => {
     if (!value) {
       selectedProject.value = null
-      emit('change', null)
+      emitProjectChange(null)
       return
     }
     if (selectedProject.value?.id !== value) loadSelectedProject(value)

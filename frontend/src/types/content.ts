@@ -1,4 +1,4 @@
-// 内容策划请求参数：对应后端 POST /api/content/plan。
+// 内容策划请求参数：language 保存字典 value，例如 en-US，对应后端 POST /api/content/plan。
 export type ContentPlanRequest = {
   project_id?: number | null
   projectName: string
@@ -39,4 +39,9 @@ export type ContentPlanHistoryItem = ContentPlanRequest & {
   recordId?: number
   result: ContentPlanResult
   createdAt: string
+}
+
+export type ContentPlanListParams = {
+  project_id?: number | null
+  limit?: number
 }

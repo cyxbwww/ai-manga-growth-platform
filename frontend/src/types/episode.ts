@@ -61,3 +61,20 @@ export type ShortDramaEpisodeListResponse = {
   items: ShortDramaEpisode[]
   total: number
 }
+
+export type EpisodeOutlineGeneratePayload = {
+  content_plan_id?: number | null
+  episode_count: number
+  start_episode_no: number
+  overwrite: boolean
+}
+
+export type EpisodeOutlineGenerateResponse = {
+  project_id: number
+  content_plan_id?: number | null
+  generation_source?: 'deepseek' | 'rule_fallback' | string
+  created_count: number
+  updated_count: number
+  skipped_count: number
+  items: ShortDramaEpisode[]
+}
