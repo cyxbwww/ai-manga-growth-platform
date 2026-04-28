@@ -14,6 +14,7 @@ import AdMaterials from '../views/AdMaterials.vue'
 import AdMaterialList from '../views/AdMaterialList.vue'
 import MediaAssets from '../views/MediaAssets.vue'
 import GrowthAnalytics from '../views/GrowthAnalytics.vue'
+import DictionaryManagement from '../views/DictionaryManagement.vue'
 import PlaceholderPage from '../views/PlaceholderPage.vue'
 
 // 路由配置：保留原生成页，同时新增生产结果列表页用于沉淀 AI 产物。
@@ -39,6 +40,7 @@ const router = createRouter({
         { path: 'ad-materials/list', name: 'AdMaterialList', component: AdMaterialList, meta: { title: '广告素材库' } },
         { path: 'media-assets', name: 'MediaAssets', component: MediaAssets, meta: { title: '素材上传与预览' } },
         { path: 'growth-analytics', name: 'GrowthAnalytics', component: GrowthAnalytics, meta: { title: '增长分析' } },
+        { path: 'settings/dictionaries', name: 'DictionaryManagement', component: DictionaryManagement, meta: { title: '字典管理' } },
         { path: 'ad-assets', redirect: '/ad-materials' },
         { path: 'growth-analysis', redirect: '/growth-analytics' },
         { path: ':module', name: 'Placeholder', component: PlaceholderPage, meta: { title: '功能预留' } },

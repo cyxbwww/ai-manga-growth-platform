@@ -52,7 +52,7 @@ type MenuGroup = {
 
 type MenuItem = LeafMenu | MenuGroup
 
-const defaultExpandedKeys = ['ai-production', 'material-growth', 'media-assets-center']
+const defaultExpandedKeys = ['ai-production', 'material-growth', 'media-assets-center', 'system-settings']
 
 // 左侧菜单按真实业务域分组：生成页与结果列表页归属同一中心，页面职责仍保持分离。
 const menus: MenuItem[] = [
@@ -84,6 +84,13 @@ const menus: MenuItem[] = [
     key: 'media-assets-center',
     children: [
       { label: '素材上传与预览', key: 'media-assets', path: '/media-assets' },
+    ],
+  },
+  {
+    label: '系统配置',
+    key: 'system-settings',
+    children: [
+      { label: '字典管理', key: 'dictionary-management', path: '/settings/dictionaries' },
     ],
   },
 ]

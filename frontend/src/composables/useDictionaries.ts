@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { getDictionaries } from '../api/dictionaries'
 import type { DictionaryResponse } from '../types/dictionary'
 
-const fallbackDictionaries: DictionaryResponse = {
+export const fallbackDictionaries: DictionaryResponse = {
   markets: ['中国大陆', '北美', '东南亚', '日本', '韩国', '中东', '欧洲', '拉美'].map((item) => ({ label: item, value: item })),
   languages: [
     { label: '中文（zh-CN）', value: 'zh-CN' },
