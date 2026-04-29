@@ -83,7 +83,7 @@
       <n-grid-item :span="16" :s-span="24">
         <n-card title="素材库与预览" :bordered="false" class="asset-card">
           <template #header-extra>
-            <n-button size="small" secondary @click="loadAssets">刷新</n-button>
+            <n-button size="small" secondary @click="loadAssets()">刷新</n-button>
           </template>
 
           <n-data-table :columns="columns" :data="assets" :bordered="false" :single-line="false" :loading="loading">
@@ -159,14 +159,20 @@ const localizedAssetTypes = [
   { title: '海外预览成片', description: '用于审核和投放前预览' },
 ]
 
+function clearPreviewAsset() {
+  previewAsset.value = null
+}
+
 function handleProjectChange(_project: ShortDramaProject | null) {
-  loadAssets()
+  clearPreviewAsset()
+  loadAssets({ autoPreview: false })
 }
 
 function handleEpisodeChange(episode: ShortDramaEpisode | null) {
   episodeId.value = episode?.id || null
   episodeNo.value = episode?.episode_no || null
-  loadAssets()
+  clearPreviewAsset()
+  loadAssets({ autoPreview: false })
 }
 
 const columns: DataTableColumns<MediaAsset> = [
@@ -315,7 +321,8 @@ async function handleUpload() {
   }
 }
 
-async function loadAssets() {
+async function loadAssets(options: { autoPreview?: boolean } = {}) {
+  const autoPreview = options.autoPreview ?? true
   loading.value = true
   try {
     const response = await getMediaAssets({
@@ -325,8 +332,13 @@ async function loadAssets() {
   })
     if (response.code === 0) {
       assets.value = response.data
-      if (!previewAsset.value && response.data.length) previewAsset.value = response.data[0]
-      if (previewAsset.value && selectedProjectId.value && previewAsset.value.project_id !== selectedProjectId.value) previewAsset.value = response.data[0] || null
+      if (!autoPreview) {
+        clearPreviewAsset()
+      } else {
+        if (!previewAsset.value && response.data.length) previewAsset.value = response.data[0]
+        if (previewAsset.value && selectedProjectId.value && previewAsset.value.project_id !== selectedProjectId.value) previewAsset.value = response.data[0] || null
+        if (previewAsset.value && episodeId.value && previewAsset.value.episode_id !== episodeId.value) previewAsset.value = response.data[0] || null
+      }
     }
   } catch {
     message.error('短剧项目列表加载失败')

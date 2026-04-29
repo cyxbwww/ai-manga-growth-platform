@@ -337,8 +337,8 @@ function workflowType(status: string) {
 
 const columns = computed<DataTableColumns<LocalizedSubtitle>>(() => [
   { title: '#', key: 'index', width: 54 },
-  { title: '开始', key: 'startTime', width: 82 },
-  { title: '结束', key: 'endTime', width: 82 },
+  { title: '开始', key: 'startTime', width: 120 },
+  { title: '结束', key: 'endTime', width: 120 },
   { title: '中文原文', key: 'originalText', minWidth: 150 },
   { title: '直译', key: 'directTranslation', minWidth: 170 },
   { title: '本地化改写', key: 'localizedText', minWidth: 220 },
