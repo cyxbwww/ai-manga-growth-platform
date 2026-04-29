@@ -6,6 +6,8 @@ API_PREFIX = os.getenv("API_PREFIX", "/api")
 
 # Debug 开关：字符串环境变量转为布尔值，便于本地和生产切换。
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+DEBUG_LLM_RESPONSE = os.getenv("DEBUG_LLM_RESPONSE", "false").lower() == "true"
+ENABLE_STORYBOARD_MOCK_FALLBACK = os.getenv("ENABLE_STORYBOARD_MOCK_FALLBACK", "false").lower() == "true"
 
 # 演示数据开关：默认开启，保证面试演示删除数据库后仍能自动生成项目和分集样例。
 ENABLE_DEMO_SEED = os.getenv("ENABLE_DEMO_SEED", "true").lower() == "true"
@@ -17,6 +19,7 @@ AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.deepseek.com")
 AI_MODEL = os.getenv("AI_MODEL", "deepseek-v4-flash")
 AI_TEMPERATURE = float(os.getenv("AI_TEMPERATURE", "0.7"))
 AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "3000"))
+STORYBOARD_LLM_MAX_TOKENS = int(os.getenv("STORYBOARD_LLM_MAX_TOKENS", "6000"))
 AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "60"))
 
 # 媒体上传配置：真实模式使用 S3 / S3 兼容 OSS，mock 模式用于本地演示。

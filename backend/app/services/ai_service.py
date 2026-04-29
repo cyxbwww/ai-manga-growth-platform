@@ -17,7 +17,7 @@ from app.core.config import (
 logger = logging.getLogger(__name__)
 
 
-def request_ai_text(system_prompt: str, user_prompt: str, response_format_json: bool = True) -> tuple[str | None, str | None]:
+def request_ai_text(system_prompt: str, user_prompt: str, response_format_json: bool = True, max_tokens: int | None = None) -> tuple[str | None, str | None]:
     # 统一复用 DeepSeek/OpenAI 兼容调用封装；业务层根据 error 决定是否走 fallback。
     if AI_PROVIDER != "deepseek":
         return None, f"AI_PROVIDER={AI_PROVIDER}"
@@ -40,7 +40,7 @@ def request_ai_text(system_prompt: str, user_prompt: str, response_format_json: 
                 {"role": "user", "content": user_prompt},
             ],
             temperature=AI_TEMPERATURE,
-            max_tokens=AI_MAX_TOKENS,
+            max_tokens=max_tokens or AI_MAX_TOKENS,
             response_format={"type": "json_object"} if response_format_json else None,
         )
         content = response.choices[0].message.content

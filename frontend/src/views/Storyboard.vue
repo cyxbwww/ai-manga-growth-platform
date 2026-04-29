@@ -665,6 +665,26 @@ function goWithContext(path: string) {
   router.push(`${path}${query.toString() ? `?${query.toString()}` : ''}`)
 }
 
+function showStoryboardGenerateError(error: unknown) {
+  const responseData = (error as { response?: { data?: { detail?: unknown } } })?.response?.data
+  const detail = responseData?.detail
+  if (detail && typeof detail === 'object' && (detail as { code?: string }).code === 'STORYBOARD_LLM_JSON_PARSE_FAILED') {
+    const reason = (detail as { reason?: string }).reason
+    const suffix = import.meta.env.DEV && reason ? `原因：${reason}` : ''
+    message.error(`AI分镜结果解析失败，模型返回内容不是合法 JSON。请重试，或适当缩短剧本文本后再生成。${suffix}`)
+    return
+  }
+  if (detail && typeof detail === 'object' && (detail as { code?: string }).code === 'STORYBOARD_DUPLICATE_CONTENT') {
+    const reasons = Array.isArray((detail as { reasons?: unknown }).reasons)
+      ? ((detail as { reasons: string[] }).reasons).filter(Boolean)
+      : []
+    const suffix = reasons.length ? `原因：${reasons.join('、')}` : ''
+    message.error(`AI分镜结果重复度过高，请补充剧本细节、减少分镜数量或重新生成。${suffix}`)
+    return
+  }
+  message.error('分镜生成失败，请确认后端服务已启动')
+}
+
 async function handleGenerate() {
   if (!form.title.trim() || !form.script.trim()) {
     message.warning('请填写剧本标题和剧本文本')
@@ -694,8 +714,8 @@ async function handleGenerate() {
       await loadHistory()
       message.success(selectedProjectId.value ? '已生成并归属到当前短剧项目。' : '分镜已生成并保存')
     }
-  } catch {
-    message.error('分镜生成失败，请确认后端服务已启动')
+  } catch (error) {
+    showStoryboardGenerateError(error)
   } finally {
     loading.value = false
   }

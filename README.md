@@ -172,6 +172,8 @@ VITE_API_BASE_URL=http://localhost:8000/api
 API_PREFIX=/api
 SERVER_PORT=8000
 DEBUG=true
+DEBUG_LLM_RESPONSE=false
+ENABLE_STORYBOARD_MOCK_FALLBACK=false
 DATABASE_URL=sqlite:///./data/app.db
 
 AI_PROVIDER=mock
@@ -180,6 +182,7 @@ AI_BASE_URL=https://api.deepseek.com
 AI_MODEL=deepseek-v4-flash
 AI_TEMPERATURE=0.7
 AI_MAX_TOKENS=3000
+STORYBOARD_LLM_MAX_TOKENS=6000
 AI_TIMEOUT=60
 
 MEDIA_PROVIDER=mock
@@ -203,6 +206,40 @@ S3_SIGNATURE_VERSION=s3v4
 - `AWS_S3_ENDPOINT_URL`：S3 兼容服务地址，例如 `https://s3.hi168.com`；官方 AWS S3 可留空。
 - `S3_ADDRESSING_STYLE=path`：适配多数 S3 兼容服务，生成 `/bucket/key` 形式的签名 URL。
 - 不要把真实 DeepSeek Key 或 AWS Key 提交到代码仓库。
+
+## 查看 DeepSeek 原始返回
+
+设置：
+
+```env
+DEBUG_LLM_RESPONSE=true
+```
+
+启动后端：
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+调用 AI分镜生成后，在后端控制台查看：
+
+- `raw_response`：DeepSeek 原始文本
+- `parsed_scene`：解析后的分镜
+- `normalized_scene`：最终入库/返回前的分镜
+
+用于判断重复问题来自模型输出、后端解析还是前端展示。日志只截断展示字段摘要，不会打印 API Key。
+
+AI分镜调试规则：
+
+- DeepSeek JSON 解析失败时，系统不会再静默使用 mock fallback。
+- 后端会返回 `STORYBOARD_LLM_JSON_PARSE_FAILED`，失败结果不会保存。
+- 开启 `DEBUG_LLM_RESPONSE=true` 后，可以查看 `raw_response`，判断模型是否输出了非 JSON、截断 JSON 或非法字符串。
+- AI分镜生成使用专用 `STORYBOARD_LLM_MAX_TOKENS` 控制输出长度，默认 `6000`；该配置只影响 AI分镜模块，不影响内容策划、剧本打磨、分集大纲、本地化和广告素材等其它 LLM 模块。
+- AI分镜 prompt 会截断长剧本片段，并对 scene/action/dialogue/emotion/visualPrompt/motionPrompt/consistencyPrompt 设置中等长度约束，平衡内容丰富度和 JSON 稳定性。
+- 当前字段长度约束为：scene 40、action 120、dialogue 80、emotion 40、visualPrompt 180、motionPrompt 150、consistencyPrompt 120 个中文字符以内。
+- DeepSeek 未启用或未配置 API Key 时，仍可使用 mock 演示数据。
+- 如需在演示环境允许 DeepSeek 调用异常后兜底，可设置 `ENABLE_STORYBOARD_MOCK_FALLBACK=true`；该开关不允许 JSON 解析失败兜底。
+- 分镜重复检测允许多个镜头处于同一 `scene`；`action`、`dialogue` 重复只记录 warning，强拦截和重试重点是 `visualPrompt`、`motionPrompt` 重复。
 
 ## 启动方式
 
