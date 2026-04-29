@@ -37,6 +37,7 @@
               value-field="value"
               placeholder="请选择目标市场"
               :options="dictionaries.markets"
+              @update:value="targetMarketTouched = true"
             />
           </n-form-item>
         </n-grid-item>
@@ -49,6 +50,7 @@
               value-field="value"
               placeholder="请选择目标语言"
               :options="dictionaries.languages"
+              @update:value="targetLanguageTouched = true"
             />
           </n-form-item>
         </n-grid-item>
@@ -61,6 +63,18 @@
           </n-form-item>
         </n-grid-item>
       </n-grid>
+      <n-form-item label="本地化输入内容" class="source-input-item">
+        <n-input
+          v-model:value="form.source_text"
+          type="textarea"
+          :autosize="{ minRows: 5, maxRows: 10 }"
+          placeholder="选择项目和分集后会自动引用分集级剧本打磨结果；也可以手动填写中文剧本或分集大纲。"
+          @update:value="handleSourceTextUpdate"
+        />
+      </n-form-item>
+      <n-alert :type="sourceNoticeType" :bordered="false" class="source-notice">
+        {{ sourceNotice }}
+      </n-alert>
     </n-card>
 
     <n-alert type="info" :bordered="false">
@@ -147,6 +161,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getLocalizationHistory, processLocalization } from '../api/localization'
+import { getEpisodeDetail } from '../api/episodes'
+import { getScriptPolishHistory } from '../api/script'
 import EpisodePicker from '../components/EpisodePicker.vue'
 import ProjectPicker from '../components/ProjectPicker.vue'
 import { useDictionaries } from '../composables/useDictionaries'
@@ -164,6 +180,7 @@ const form = reactive<LocalizationProcessRequest>({
   market: '北美',
   language: 'en-US',
   strategy: '情绪强化',
+  source_text: '',
 })
 
 const loading = ref(false)
@@ -172,18 +189,147 @@ const history = ref<LocalizationHistoryItem[]>([])
 const selectedProjectId = ref<number | null>(null)
 const episodeId = ref<number | null>(null)
 const episodeNo = ref<number | null>(null)
+const selectedProject = ref<ShortDramaProject | null>(null)
+const sourceTextTouched = ref(false)
+const targetMarketTouched = ref(false)
+const targetLanguageTouched = ref(false)
+const sourceNotice = ref('未找到可用中文内容，请手动填写后再本地化。')
+const sourceNoticeType = ref<'info' | 'warning' | 'success'>('warning')
 const message = useMessage()
 
 const strategyOptions = ['直译', '情绪强化', '文化适配', '广告转化优先'].map((item) => ({ label: item, value: item }))
 
-function handleProjectChange(_project: ShortDramaProject | null) {
+type LooseRecord = Record<string, any>
+
+function safeParseJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+function pickText(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function extractScriptText(record: unknown) {
+  const item = record as LooseRecord
+  const result = safeParseJson(item?.result) as LooseRecord
+  const bilingual = (result?.bilingual || {}) as LooseRecord
+  const zh = (bilingual?.zh || result?.zh || {}) as LooseRecord
+  return pickText(
+    zh.polishedScript,
+    zh.optimizedScript,
+    zh.script,
+    result?.polishedScriptZh,
+    result?.optimizedScriptZh,
+    item?.polished_script_zh,
+    item?.script_text,
+    item?.original_script,
+    item?.script,
+  )
+}
+
+function extractHistorySourceText(item: LocalizationHistoryItem) {
+  const raw = item as unknown as LooseRecord
+  const resultData = (raw.result || {}) as LooseRecord
+  const subtitleSource = Array.isArray(resultData.subtitles)
+    ? resultData.subtitles.map((subtitle: LooseRecord) => subtitle.originalText).filter(Boolean).join('\n')
+    : ''
+  return pickText(raw.source_text, raw.sourceText, raw.original_text, resultData.sourceText, resultData.source_text, subtitleSource)
+}
+
+function setSourceNotice(messageText: string, type: 'info' | 'warning' | 'success' = 'info') {
+  sourceNotice.value = messageText
+  sourceNoticeType.value = type
+}
+
+function applySourceText(text: string, notice: string, type: 'info' | 'warning' | 'success' = 'success') {
+  if (sourceTextTouched.value && form.source_text?.trim()) {
+    setSourceNotice('当前本地化输入已手动编辑，未自动覆盖。', 'warning')
+    return
+  }
+  form.source_text = text
+  setSourceNotice(notice, type)
+}
+
+function applyProjectDefaults(project: ShortDramaProject | null) {
+  if (!project) return
+  if ((!targetMarketTouched.value || !form.market) && project.target_market) {
+    form.market = project.target_market
+  }
+  const projectLanguage = (project as ShortDramaProject & { primary_language?: string }).primary_language || project.language
+  if ((!targetLanguageTouched.value || !form.language) && projectLanguage) {
+    form.language = projectLanguage
+  }
+}
+
+async function autoFillLocalizationSource() {
+  if (!selectedProjectId.value || !episodeId.value) return
+  if (sourceTextTouched.value && form.source_text?.trim()) {
+    setSourceNotice('当前本地化输入已手动编辑，未自动覆盖。', 'warning')
+    return
+  }
+
+  try {
+    const polishResponse = await getScriptPolishHistory({
+      project_id: selectedProjectId.value,
+      episode_id: episodeId.value,
+      limit: 1,
+    })
+    const latestPolish = polishResponse.code === 0 ? polishResponse.data[0] : null
+    const polishText = latestPolish ? extractScriptText(latestPolish) : ''
+    if (polishText) {
+      applySourceText(polishText, '已引用最近一次分集级剧本打磨中文结果作为本地化输入。', 'success')
+      return
+    }
+
+    const episodeResponse = await getEpisodeDetail(episodeId.value)
+    if (episodeResponse.code === 0 && episodeResponse.data?.summary) {
+      const episode = episodeResponse.data
+      applySourceText(`第 ${episode.episode_no} 集：${episode.title}\n${episode.summary}`, '未找到剧本打磨记录，已使用分集大纲作为本地化输入。', 'info')
+      return
+    }
+
+    if (selectedProject.value?.description) {
+      applySourceText(selectedProject.value.description, '未找到分集内容，已使用项目简介作为本地化输入。', 'warning')
+      return
+    }
+
+    setSourceNotice('未找到可用中文内容，请手动填写后再本地化。', 'warning')
+  } catch {
+    setSourceNotice('未找到可用中文内容，请手动填写后再本地化。', 'warning')
+  }
+}
+
+function handleSourceTextUpdate() {
+  sourceTextTouched.value = true
+  setSourceNotice('当前本地化输入已手动编辑，未自动覆盖。', 'warning')
+}
+
+function handleProjectChange(project: ShortDramaProject | null) {
+  const previousProjectId = selectedProject.value?.id || null
+  selectedProject.value = project
+  applyProjectDefaults(project)
+  if (previousProjectId && project?.id !== previousProjectId) {
+    episodeId.value = null
+    episodeNo.value = null
+    if (!sourceTextTouched.value) form.source_text = ''
+  }
   loadHistory()
+  autoFillLocalizationSource()
 }
 
 function handleEpisodeChange(episode: ShortDramaEpisode | null) {
   episodeId.value = episode?.id || null
   episodeNo.value = episode?.episode_no || null
   loadHistory()
+  autoFillLocalizationSource()
 }
 
 function statusTag(status: string) {
@@ -216,12 +362,22 @@ function formatTime(value: string) {
 
 function selectHistory(item: LocalizationHistoryItem) {
   result.value = item.result
+  sourceTextTouched.value = true
+  targetMarketTouched.value = true
+  targetLanguageTouched.value = true
+  form.market = (item as unknown as LooseRecord).target_market || item.market
+  form.language = (item as unknown as LooseRecord).target_language || item.language
+  form.strategy = item.strategy
+  form.source_text = extractHistorySourceText(item)
+  setSourceNotice('已从历史记录恢复本地化输入和上下文。', 'info')
   // 点击历史时恢复链路 ID，旧数据没有这些字段时自动跳过。
   if (item.contentPlanId) pipeline.setContentPlanId(item.contentPlanId)
   if (item.scriptPolishId) pipeline.setScriptPolishId(item.scriptPolishId)
   if (item.storyboardId) pipeline.setStoryboardId(item.storyboardId)
   pipeline.setLocalizationId(item.recordId || item.id)
   if (item.project_id) selectedProjectId.value = item.project_id
+  if (item.episode_id) episodeId.value = item.episode_id
+  if (item.episode_no) episodeNo.value = item.episode_no
   message.success('已加载历史本地化结果')
 }
 
@@ -289,6 +445,7 @@ onMounted(async () => {
   const queryProjectId = Number(route.query.projectId)
   if (queryProjectId) selectedProjectId.value = queryProjectId
   await loadHistory()
+  await autoFillLocalizationSource()
 })
 </script>
 
@@ -324,6 +481,14 @@ onMounted(async () => {
 .project-select {
   flex: 1;
   margin-bottom: 0;
+}
+
+.source-input-item {
+  margin-top: 14px;
+}
+
+.source-notice {
+  margin-top: 4px;
 }
 
 .episode-context-card {

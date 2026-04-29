@@ -431,6 +431,12 @@ S3_SIGNATURE_VERSION=s3v4
 
 AI分镜现在支持 `projectId + episodeId`。从分集管理进入 AI分镜制作时，页面会携带 `projectId`、`episodeId`、`episodeNo`，并在顶部展示当前正在为哪一集生成分镜。
 
+## 多语种本地化绑定 projectId + episodeId
+
+多语种本地化页面支持通过 `projectId + episodeId` 绑定到具体短剧项目和分集。进入本地化页面后，会优先读取最近一次分集级剧本打磨中文结果作为本地化输入；没有剧本打磨记录时，使用分集大纲 summary 兜底；如果分集内容不可用，则使用项目简介兜底。
+
+目标市场会优先来自项目 `target_market`，目标语言会优先来自项目 `language` / `primary_language`。页面会显示“内容来源”提示，方便演示本地化输入来自剧本打磨、分集大纲、项目简介，还是用户手动编辑。本地化结果继续用于海外字幕、配音方向、口型匹配状态和海外版本生产流程展示。
+
 分镜生成请求会把 `project_id`、`episode_id`、`episode_no` 传给后端，生成结果会同时保存到对应短剧项目和具体分集。分镜生成成功后，后端会把该分集的 `storyboard_status` 更新为 `completed`，并将分集阶段推进到 `localization`。
 
 分镜任务列表支持按项目和分集筛选，例如：

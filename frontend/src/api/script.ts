@@ -11,6 +11,7 @@ export type ScriptPolishHistoryParams = {
   project_id?: number | null
   episode_id?: number | null
   episode_no?: number | null
+  limit?: number
 }
 
 // 获取最近 20 条剧本打磨历史记录，支持按项目或分集筛选。

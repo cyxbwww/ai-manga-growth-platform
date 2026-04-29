@@ -3,6 +3,7 @@ export type LocalizationProcessRequest = {
   market: string
   language: string
   strategy: string
+  source_text?: string | null
   // project_id 用于把本地化结果归属到短剧项目；可为空以兼容独立使用。
   project_id?: number | null
   episode_id?: number | null
