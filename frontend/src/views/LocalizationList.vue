@@ -47,7 +47,7 @@
       </n-space>
     </n-card>
 
-    <n-modal v-model:show="detailVisible" preset="card" title="本地化详情" class="detail-modal">
+    <n-modal v-model:show="detailVisible" preset="card" title="本地化详情" class="detail-modal" :style="{ width: '70%' }">
       <n-descriptions v-if="currentRecord" bordered :column="2" size="small" class="detail-desc">
         <n-descriptions-item label="分集 ID">{{ currentRecord.episode_id || '-' }}</n-descriptions-item>
         <n-descriptions-item label="集数">{{ currentRecord.episode_no ? `第 ${currentRecord.episode_no} 集` : '-' }}</n-descriptions-item>

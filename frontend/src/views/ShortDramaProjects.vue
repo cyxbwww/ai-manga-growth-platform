@@ -72,7 +72,7 @@
       preset="card"
       :title="editingId ? '编辑短剧项目' : '新建短剧项目'"
       class="project-modal"
-      :style="{ width: '1800px' }"
+      :style="{ width: '70%' }"
     >
       <n-form :model="form" label-placement="top">
         <n-grid :cols="2" :x-gap="16">
@@ -236,7 +236,7 @@ const columns: DataTableColumns<ShortDramaProject> = [
   {
     title: '项目名称',
     key: 'name',
-    minWidth: 220,
+    minWidth: 420,
     render(row) {
       return h('div', { class: 'project-name-cell' }, [
         h('div', { class: 'project-name' }, row.name),
@@ -277,7 +277,7 @@ const columns: DataTableColumns<ShortDramaProject> = [
   {
     title: '操作',
     key: 'actions',
-    width: 300,
+    width: 220,
     fixed: 'right',
     render(row) {
       return h(NSpace, { size: 8 }, {

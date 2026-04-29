@@ -26,7 +26,7 @@
       </n-space>
     </div>
 
-    <n-modal v-model:show="showModal" preset="card" title="选择短剧项目" class="project-picker-modal" :style="{ width: '1800px' }">
+    <n-modal v-model:show="showModal" preset="card" title="选择短剧项目" class="project-picker-modal" :style="{ width: '70%' }">
       <!-- 真实业务里项目数量会增长，弹窗表格比下拉框更适合筛选、识别阶段和状态。 -->
       <n-space vertical size="medium">
         <n-card size="small" :bordered="false" class="filter-card">

@@ -47,7 +47,7 @@
       </n-space>
     </n-card>
 
-    <n-modal v-model:show="detailVisible" preset="card" title="广告素材详情" class="detail-modal">
+    <n-modal v-model:show="detailVisible" preset="card" title="广告素材详情" class="detail-modal" :style="{ width: '70%' }">
       <n-space vertical size="large" v-if="currentRecord">
         <n-descriptions bordered :column="2" size="small">
           <n-descriptions-item label="分集 ID">{{ currentRecord.episode_id || '-' }}</n-descriptions-item>

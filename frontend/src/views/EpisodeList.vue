@@ -46,7 +46,7 @@
       </div>
     </n-card>
 
-    <n-modal v-model:show="showModal" preset="card" :title="editingId ? '编辑分集大纲' : '新增分集'" class="episode-modal">
+    <n-modal v-model:show="showModal" preset="card" :title="editingId ? '编辑分集大纲' : '新增分集'" class="episode-modal" :style="{ width: '70%' }">
       <n-form :model="form" label-placement="top">
         <n-alert v-if="editingId" type="info" :bordered="false" class="outline-edit-tip">
           AI 生成的分集大纲为初稿，可在这里逐集调整后再进入剧本打磨、AI分镜和本地化生产。
