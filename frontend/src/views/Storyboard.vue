@@ -21,12 +21,14 @@
                   @change="handleEpisodeChange"
                 />
               </n-form-item>
-              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
-                返回项目详情
-              </n-button>
-              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
-                返回分集列表
-              </n-button>
+              <div v-if="selectedProjectId" class="quick-actions">
+                <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+                  返回项目详情
+                </n-button>
+                <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+                  返回分集列表
+                </n-button>
+              </div>
               <n-alert v-if="inputHydrateTip.message" :type="inputHydrateTip.type" :bordered="false" class="input-hydrate-tip">
                 {{ inputHydrateTip.message }}
               </n-alert>
@@ -1004,6 +1006,12 @@ onMounted(async () => {
   margin-top: 16px;
 }
 
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 @media (max-width: 900px) {
   .story-card-body {
     flex-direction: column;
@@ -1015,6 +1023,10 @@ onMounted(async () => {
   }
 
   .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-actions {
     grid-template-columns: 1fr;
   }
 }

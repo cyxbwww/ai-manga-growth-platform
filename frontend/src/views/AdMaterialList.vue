@@ -118,7 +118,7 @@ const columns: DataTableColumns<AdMaterialHistoryItem> = [
   {
     title: '操作',
     key: 'actions',
-    width: 300,
+    width: 400,
     render: (row) => h(NSpace, { size: 8 }, {
       default: () => [
         h(NButton, { size: 'small', secondary: true, onClick: () => showDetail(row) }, { default: () => '查看详情' }),

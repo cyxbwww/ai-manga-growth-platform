@@ -24,6 +24,16 @@
                 @change="handleEpisodeChange"
               />
             </n-form-item>
+
+            <div v-if="selectedProjectId" class="quick-actions">
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+                返回项目详情
+              </n-button>
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+                返回分集列表
+              </n-button>
+            </div>
+
             <n-alert v-if="selectedProjectId" type="info" :bordered="false" class="context-note">
               {{ mediaContextText }}
             </n-alert>
@@ -44,12 +54,6 @@
                 </div>
               </div>
             </n-card>
-            <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
-              返回项目详情
-            </n-button>
-            <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
-              返回分集列表
-            </n-button>
 
             <div class="upload-box">
               <input ref="fileInputRef" class="file-input" type="file" :accept="acceptTypes" @change="handleFileChange" />
@@ -498,5 +502,11 @@ onMounted(async () => {
   line-height: 1.7;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 </style>

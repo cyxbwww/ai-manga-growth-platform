@@ -1,14 +1,8 @@
 <template>
   <div class="module-page">
-    <n-card title="本地化配置" :bordered="false" class="config-card">
-      <div class="config-card-content">
-        <div v-if="selectedProjectId">
-          <n-button secondary @click="router.push(`/projects/${selectedProjectId}`)">返回项目详情</n-button>
-          <n-button secondary class="episode-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
-            返回分集列表
-          </n-button>
-        </div>
-        <div class="project-bind-row">
+    <div class="localization-workbench">
+      <n-card title="本地化配置" :bordered="false" class="config-card">
+        <n-space vertical size="medium">
           <n-form-item label="所属短剧项目" class="project-select">
             <ProjectPicker
               v-model="selectedProjectId"
@@ -16,6 +10,7 @@
               @change="handleProjectChange"
             />
           </n-form-item>
+
           <n-form-item label="所属分集" class="project-select">
             <EpisodePicker
               v-model="episodeId"
@@ -25,10 +20,12 @@
               @change="handleEpisodeChange"
             />
           </n-form-item>
-        </div>
-      </div>
-      <n-grid :cols="24" :x-gap="14" :y-gap="14" responsive="screen">
-        <n-grid-item :span="5" :s-span="24">
+
+          <div v-if="selectedProjectId" class="quick-actions">
+            <n-button secondary block @click="router.push('/projects/' + selectedProjectId)">返回项目详情</n-button>
+            <n-button secondary block @click="router.push('/projects/' + selectedProjectId + '/episodes')">返回分集列表</n-button>
+          </div>
+
           <n-form-item label="目标市场">
             <n-select
               v-model:value="form.market"
@@ -40,8 +37,7 @@
               @update:value="targetMarketTouched = true"
             />
           </n-form-item>
-        </n-grid-item>
-        <n-grid-item :span="5" :s-span="24">
+
           <n-form-item label="目标语言">
             <n-select
               v-model:value="form.language"
@@ -53,36 +49,34 @@
               @update:value="targetLanguageTouched = true"
             />
           </n-form-item>
-        </n-grid-item>
-        <n-grid-item :span="7" :s-span="24">
-          <n-form-item label="本地化策略"><n-select v-model:value="form.strategy" :options="strategyOptions" /></n-form-item>
-        </n-grid-item>
-        <n-grid-item :span="4" :s-span="24">
-          <n-form-item label="操作">
-            <n-button type="primary" block :loading="loading" @click="handleProcess">开始本地化</n-button>
+
+          <n-form-item label="本地化策略">
+            <n-select v-model:value="form.strategy" :options="strategyOptions" />
           </n-form-item>
-        </n-grid-item>
-      </n-grid>
-      <n-form-item label="本地化输入内容" class="source-input-item">
-        <n-input
-          v-model:value="form.source_text"
-          type="textarea"
-          :autosize="{ minRows: 5, maxRows: 10 }"
-          placeholder="选择项目和分集后会自动引用分集级剧本打磨结果；也可以手动填写中文剧本或分集大纲。"
-          @update:value="handleSourceTextUpdate"
-        />
-      </n-form-item>
-      <n-alert :type="sourceNoticeType" :bordered="false" class="source-notice">
-        {{ sourceNotice }}
-      </n-alert>
-    </n-card>
 
-    <n-alert type="info" :bordered="false">
-      中文用于内部审核，目标语言用于海外投放。当前页面可独立使用，也可从上一环节进入以自动绑定剧本或分镜来源。
-    </n-alert>
+          <n-form-item label="本地化输入内容" class="source-input-item">
+            <n-input
+              v-model:value="form.source_text"
+              type="textarea"
+              :autosize="{ minRows: 8, maxRows: 12 }"
+              placeholder="选择项目和分集后会自动引用分集级剧本打磨结果；也可以手动填写中文剧本或分集大纲。"
+              @update:value="handleSourceTextUpdate"
+            />
+          </n-form-item>
 
-    <n-grid :cols="24" :x-gap="18" :y-gap="18" responsive="screen">
-      <n-grid-item :span="17" :s-span="24">
+          <n-alert :type="sourceNoticeType" :bordered="false" class="source-notice">
+            {{ sourceNotice }}
+          </n-alert>
+
+          <n-alert type="info" :bordered="false" class="localization-note">
+            中文用于内部审核，目标语言用于海外投放；本地化输入会随 projectId / episodeId 沉淀到具体分集链路。
+          </n-alert>
+
+          <n-button type="primary" block size="large" :loading="loading" @click="handleProcess">开始本地化</n-button>
+        </n-space>
+      </n-card>
+
+      <div class="localization-main">
         <n-spin :show="loading">
           <n-card title="字幕本地化结果" :bordered="false" class="result-card">
             <template v-if="result">
@@ -118,41 +112,37 @@
                 <n-button type="primary" secondary @click="goWithContext('/media-assets')">进入媒体资产管理</n-button>
               </div>
             </template>
-            <n-empty v-else description="选择配置后开始本地化，或点击历史记录查看已保存结果。" />
+            <n-empty v-else description="选择项目和分集后开始本地化，结果会展示在这里。" />
           </n-card>
         </n-spin>
-      </n-grid-item>
 
-      <n-grid-item :span="7" :s-span="24">
-        <n-space vertical size="large">
-          <n-card title="海外版本生产流程" :bordered="false" class="workflow-card">
-            <n-timeline v-if="result">
-              <n-timeline-item
-                v-for="item in result.workflow"
-                :key="item.step"
-                :type="workflowType(item.status)"
-                :title="item.step"
-                :content="`${item.status} - ${item.description}`"
-              />
-            </n-timeline>
-            <n-empty v-else description="本地化流程会在生成后展示。" />
-          </n-card>
+        <n-card title="海外版本生产流程" :bordered="false" class="workflow-card">
+          <n-timeline v-if="result">
+            <n-timeline-item
+              v-for="item in result.workflow"
+              :key="item.step"
+              :type="workflowType(item.status)"
+              :title="item.step"
+              :content="item.status + ' - ' + item.description"
+            />
+          </n-timeline>
+          <n-empty v-else description="本地化流程会在生成后展示。" />
+        </n-card>
 
-          <n-card title="历史记录" :bordered="false">
-            <n-list v-if="history.length" hoverable clickable>
-              <n-list-item v-for="item in history" :key="item.id" @click="selectHistory(item)">
-                <n-thing :title="`${item.market} / ${item.language}`" :description="formatTime(item.createdAt)">
-                  <template #header-extra>
-                    <n-tag type="info" bordered>{{ item.strategy }}</n-tag>
-                  </template>
-                </n-thing>
-              </n-list-item>
-            </n-list>
-            <n-empty v-else description="暂无历史记录，本地化后会自动保存。" />
-          </n-card>
-        </n-space>
-      </n-grid-item>
-    </n-grid>
+        <n-card title="历史记录" :bordered="false">
+          <n-list v-if="history.length" hoverable clickable>
+            <n-list-item v-for="item in history" :key="item.id" @click="selectHistory(item)">
+              <n-thing :title="item.market + ' / ' + item.language" :description="formatTime(item.createdAt)">
+                <template #header-extra>
+                  <n-tag type="info" bordered>{{ item.strategy }}</n-tag>
+                </template>
+              </n-thing>
+            </n-list-item>
+          </n-list>
+          <n-empty v-else description="暂无历史记录，本地化后会自动保存。" />
+        </n-card>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -452,68 +442,48 @@ onMounted(async () => {
 
 <style scoped>
 .module-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
   min-height: calc(100vh - 120px);
 }
 
-.config-card-content {
-  position: relative;
+.localization-workbench {
+  display: grid;
+  grid-template-columns: minmax(420px, 520px) 1fr;
+  gap: 18px;
+  align-items: start;
 }
 
-.config-card-content > div:not(.project-bind-row) {
-  position: absolute;
-  top: -48px;
-  right: 0;
+.config-card {
+  background: #fff;
 }
 
-.project-bind-row {
+.quick-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  align-items: stretch;
+  gap: 10px;
 }
 
-:global(.episode-picker) {
-  height: 100%;
+.localization-main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
 }
 
-.project-select {
-  flex: 1;
+.project-select,
+.source-input-item {
   margin-bottom: 0;
 }
 
-.source-input-item {
-  margin-top: 14px;
+.source-notice,
+.localization-note {
+  margin-top: -2px;
 }
 
-.source-notice {
-  margin-top: 4px;
+.result-card {
+  min-height: 420px;
 }
 
-.episode-context-card {
-  margin-bottom: 14px;
-  background: #f8fafc;
-}
-
-.episode-context-title {
-  color: #111827;
-  font-weight: 800;
-}
-
-.episode-context-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin: 8px 0 12px;
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.result-card,
 .workflow-card {
-  min-height: 620px;
+  min-height: 260px;
 }
 
 .localization-summary {
@@ -578,7 +548,18 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-.episode-back-btn {
-  margin-left: 8px;
+@media (max-width: 980px) {
+  .localization-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .next-step-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>
