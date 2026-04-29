@@ -7,6 +7,8 @@ export type StoryboardGenerateRequest = {
   script: string
   style: string
   sceneCount: number
+  language?: string | null
+  target_language?: string | null
   contentPlanId?: number | null
   scriptPolishId?: number | null
 }

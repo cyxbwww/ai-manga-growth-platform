@@ -206,6 +206,7 @@ import { getScriptPolishHistory } from '../api/script'
 import { generateStoryboard, getStoryboardHistory } from '../api/storyboard'
 import EpisodePicker from '../components/EpisodePicker.vue'
 import ProjectPicker from '../components/ProjectPicker.vue'
+import { useDictionaries } from '../composables/useDictionaries'
 import { usePipelineStore } from '../stores/pipeline'
 import type { ShortDramaEpisode } from '../types/episode'
 import type { ShortDramaProject } from '../types/project'
@@ -236,6 +237,7 @@ const message = useMessage()
 const route = useRoute()
 const router = useRouter()
 const pipeline = usePipelineStore()
+const { getLabel, loadDictionaries } = useDictionaries()
 const selectedProjectId = ref<number | null>(null)
 const episodeId = ref<number | null>(null)
 const episodeNo = ref<number | null>(null)
@@ -265,7 +267,8 @@ function loadEpisodeQuery() {
 const hasBilingualScenes = computed(() => Boolean(result.value?.scenes.some((scene) => scene.bilingual)))
 const targetLanguage = computed(() => {
   const target = result.value?.scenes.find((scene) => scene.bilingual)?.bilingual?.target
-  return typeof target === 'object' ? target.language || '目标语言' : '目标语言'
+  const languageCode = typeof target === 'object' ? target.language || '' : ''
+  return languageCode ? getLabel('languages', languageCode) : '目标语言'
 })
 
 function markInputTouched(field: keyof typeof touchedInputs) {
@@ -706,6 +709,8 @@ async function handleGenerate() {
       project_id: selectedProjectId.value,
       episode_id: episodeId.value,
       episode_no: episodeNo.value,
+      language: currentProject.value?.language || undefined,
+      target_language: currentProject.value?.language || undefined,
       contentPlanId: pipeline.contentPlanId,
       scriptPolishId: pipeline.scriptPolishId,
     })
@@ -724,6 +729,7 @@ async function handleGenerate() {
 }
 
 onMounted(async () => {
+  await loadDictionaries()
   loadEpisodeQuery()
   // 从项目详情页或分集列表进入时，ProjectPicker 会根据 projectId 加载并回显项目详情。
   const queryProjectId = Number(route.query.projectId)

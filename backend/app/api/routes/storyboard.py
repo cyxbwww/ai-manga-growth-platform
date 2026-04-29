@@ -25,8 +25,11 @@ from app.core.config import (
 )
 from app.core.database import get_db
 from app.models.short_drama_episode import ShortDramaEpisode
+from app.models.short_drama_project import ShortDramaProject
+from app.models.script_polish import ScriptPolish
 from app.models.storyboard import Storyboard
 from app.services.ai_service import request_ai_text
+from app.services.dictionary_service import language_prompt_name
 from app.services.project_flow import advance_project_stage
 
 
@@ -189,12 +192,43 @@ class StoryboardGenerateRequest(BaseModel):
     script: str
     style: str
     sceneCount: int
+    language: Optional[str] = None
+    target_language: Optional[str] = None
     contentPlanId: Optional[int] = None
     scriptPolishId: Optional[int] = None
 
 
 def text_or_empty(value: Any) -> str:
     return value if isinstance(value, str) else ""
+
+
+def is_storyboard_language_placeholder(value: Any) -> bool:
+    text = text_or_empty(value).strip()
+    return not text or text in {"目标语言", "鐩爣璇█", "target language", "Target Language"}
+
+
+def is_storyboard_language_code(value: Any) -> bool:
+    return bool(re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", text_or_empty(value).strip()))
+
+
+def resolve_storyboard_target_language(
+    db: Session,
+    project_id: Optional[int] = None,
+    script_polish_id: Optional[int] = None,
+    explicit_language: Optional[str] = None,
+) -> str:
+    # language 对外始终返回字典 value，例如 en-US；不要把“目标语言”这类 UI 占位文案写入结果。
+    if is_storyboard_language_code(explicit_language):
+        return text_or_empty(explicit_language).strip()
+    if script_polish_id:
+        polish = db.query(ScriptPolish).filter(ScriptPolish.id == script_polish_id).first()
+        if polish and is_storyboard_language_code(polish.language):
+            return polish.language.strip()
+    if project_id:
+        project = db.query(ShortDramaProject).filter(ShortDramaProject.id == project_id).first()
+        if project and is_storyboard_language_code(project.language):
+            return project.language.strip()
+    return "en-US"
 
 
 def truncate_for_llm_debug(value: Any, limit: int = 200) -> str:
@@ -611,6 +645,8 @@ def validate_storyboard_uniqueness(scenes: list) -> dict:
 def build_duplicate_retry_prompt(payload: "StoryboardGenerateRequest") -> str:
     # 重试阶段只保留必要上下文和短 JSON 约束，降低模型输出过长导致 JSON 截断的概率。
     script_preview = payload.script[:1200]
+    target_language = payload.language or payload.target_language or "en-US"
+    target_language_name = language_prompt_name(target_language)
     return f"""
 请根据以下短剧剧本重新生成 AI 分镜 JSON。
 
@@ -618,6 +654,10 @@ def build_duplicate_retry_prompt(payload: "StoryboardGenerateRequest") -> str:
 剧本：{script_preview}
 风格：{payload.style}
 分镜数量：{payload.sceneCount}
+target_language：{target_language}
+目标语言名称：{target_language_name}
+
+必须包含 bilingual.zh 和 bilingual.target；bilingual.target.language 固定为 "{target_language}"，target 内容使用 {target_language_name}，不要复制中文。
 
 {RETRY_DUPLICATE_INSTRUCTION}
 """
@@ -656,7 +696,7 @@ def raise_storyboard_generation_error(reason: str) -> None:
     )
 
 
-def build_scene(index: int, style: str, title: str) -> dict:
+def build_scene(index: int, style: str, title: str, target_language: str = "en-US") -> dict:
     # mock fallback 也必须返回完整 bilingual 对象，保证前端切换语言时不会出现空白。
     duration = "4秒" if index <= 2 else "5秒"
     zh = {
@@ -670,7 +710,7 @@ def build_scene(index: int, style: str, title: str) -> dict:
         "consistencyPrompt": "保持女主黑色长发、冷静眼神、白色礼服一致；保持男主深色西装和婚礼场景一致",
     }
     target = {
-        "language": "英文",
+        "language": target_language,
         "title": f"{title} storyboard scene {index}",
         "scene": f"Scene {index} takes place in a high-pressure confrontation, focusing on the emotional shift between the heroine and her opponents.",
         "characterAction": "The heroine moves from silence to a decisive counterattack, raises her eyes, pauses, and reveals key evidence.",
@@ -690,12 +730,12 @@ def build_scene(index: int, style: str, title: str) -> dict:
     }
 
 
-def build_storyboard_result(payload: StoryboardGenerateRequest) -> dict:
+def build_storyboard_result(payload: StoryboardGenerateRequest, target_language: str = "en-US") -> dict:
     scene_count = max(1, min(payload.sceneCount, 8))
     return {
         "storyboardTitle": f"{payload.title} - AI分镜生产稿",
         "style": payload.style,
-        "scenes": [build_scene(index, payload.style, payload.title) for index in range(1, scene_count + 1)],
+        "scenes": [build_scene(index, payload.style, payload.title, target_language) for index in range(1, scene_count + 1)],
     }
 
 
@@ -786,6 +826,8 @@ JSON 格式：
 
 def build_user_prompt(payload: StoryboardGenerateRequest) -> str:
     script_preview = payload.script[:1500]
+    target_language = payload.language or payload.target_language or "en-US"
+    target_language_name = language_prompt_name(target_language)
     return f"""
 请基于以下剧本片段生成 AI短剧分镜草稿。
 
@@ -793,6 +835,14 @@ def build_user_prompt(payload: StoryboardGenerateRequest) -> str:
 剧本片段：{script_preview}
 画面风格：{payload.style}
 分镜数量：{payload.sceneCount}
+target_language：{target_language}
+目标语言名称：{target_language_name}
+
+输出语言要求：
+1. 顶层 scene/action/dialogue/emotion/visualPrompt/motionPrompt/consistencyPrompt 和 bilingual.zh 必须是中文。
+2. 每个 scene 必须包含 bilingual.zh 和 bilingual.target 两个对象。
+3. bilingual.target 必须使用 {target_language_name}，language 字段必须固定为 "{target_language}"。
+4. 点击前端目标语言切换时，应能看到 {target_language_name} 标题、场景、动作、台词和提示词，不要复制中文。
 
 {STORYBOARD_JSON_STABILITY_RULES}
 {STORYBOARD_FIELD_LENGTH_RULES}
@@ -842,11 +892,12 @@ def normalize_bilingual_value(value: Any, scene: dict, scene_no: int, language: 
         "consistencyPrompt": text_or_empty(source.get("consistencyPrompt")) or text_or_empty(scene.get("consistencyPrompt")),
     }
     if language is not None:
-        normalized["language"] = text_or_empty(source.get("language")) or language
+        source_language = text_or_empty(source.get("language")).strip()
+        normalized["language"] = source_language if is_storyboard_language_code(source_language) else language
     return normalized
 
 
-def normalize_scene(scene: Any, index: int, fallback_scene: dict) -> dict:
+def normalize_scene(scene: Any, index: int, fallback_scene: dict, target_language: str = "en-US") -> dict:
     # 统一 sceneNo / sceneNumber，并保证顶层字段、bilingual.zh、bilingual.target 都是完整结构。
     if not isinstance(scene, dict):
         scene = {}
@@ -866,8 +917,10 @@ def normalize_scene(scene: Any, index: int, fallback_scene: dict) -> dict:
     # 优先使用 AI 原始 bilingual；如果 AI 只返回顶层字段，不能让 fallback bilingual 覆盖真实输出。
     raw_bilingual = scene.get("bilingual") if isinstance(scene.get("bilingual"), dict) else {}
     bilingual = raw_bilingual if raw_bilingual else {}
+    fallback_bilingual = fallback_scene.get("bilingual") if isinstance(fallback_scene.get("bilingual"), dict) else {}
     zh = normalize_bilingual_value(bilingual.get("zh"), merged, scene_no)
-    target = normalize_bilingual_value(bilingual.get("target"), merged, scene_no, "目标语言")
+    target_source = bilingual.get("target") or fallback_bilingual.get("target")
+    target = normalize_bilingual_value(target_source, merged, scene_no, target_language)
 
     # 顶层字段默认使用中文版本，方便中文页面和旧逻辑直接展示。
     for field in SCENE_TEXT_FIELDS:
@@ -877,7 +930,7 @@ def normalize_scene(scene: Any, index: int, fallback_scene: dict) -> dict:
     return merged
 
 
-def normalize_storyboard_result(result: dict, fallback_data: dict, scene_count: int) -> dict:
+def normalize_storyboard_result(result: dict, fallback_data: dict, scene_count: int, target_language: str = "en-US") -> dict:
     # 不信任 AI 原始结构：到前端前强制补齐 scenes 数量和每个 scene 的 bilingual 对象字段。
     if not isinstance(result, dict):
         result = {}
@@ -890,8 +943,8 @@ def normalize_storyboard_result(result: dict, fallback_data: dict, scene_count: 
     normalized_scenes = []
     for index in range(1, scene_count + 1):
         raw_scene = raw_scenes[index - 1] if index - 1 < len(raw_scenes) else {}
-        fallback_scene = fallback_scenes[index - 1] if index - 1 < len(fallback_scenes) else build_scene(index, fallback_data["style"], fallback_data["storyboardTitle"])
-        normalized_scenes.append(normalize_scene(raw_scene, index, fallback_scene))
+        fallback_scene = fallback_scenes[index - 1] if index - 1 < len(fallback_scenes) else build_scene(index, fallback_data["style"], fallback_data["storyboardTitle"], target_language)
+        normalized_scenes.append(normalize_scene(raw_scene, index, fallback_scene, target_language))
 
     return {
         "storyboardTitle": text_or_empty(result.get("storyboardTitle")) or fallback_data["storyboardTitle"],
@@ -939,7 +992,7 @@ def save_storyboard_record(payload: StoryboardGenerateRequest, result: dict, db:
     return record
 
 
-def stream_deepseek_storyboard(payload: StoryboardGenerateRequest, fallback_data: dict) -> dict:
+def stream_deepseek_storyboard(payload: StoryboardGenerateRequest, fallback_data: dict, target_language: str = "en-US") -> dict:
     logger.info("Storyboard DeepSeek stream request max_tokens=%s", STORYBOARD_LLM_MAX_TOKENS)
     client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL, timeout=AI_TIMEOUT)
     response = client.chat.completions.create(
@@ -963,14 +1016,20 @@ def stream_deepseek_storyboard(payload: StoryboardGenerateRequest, fallback_data
         logger.warning("DeepSeek storyboard stream JSON parse failed: %s", exc)
         raise_storyboard_parse_error(exc, content)
     log_storyboard_parsed_result(parsed)
-    return normalize_storyboard_result(parsed, fallback_data, payload.sceneCount)
+    return normalize_storyboard_result(parsed, fallback_data, payload.sceneCount, target_language)
 
 
 @router.post("/generate")
 def generate_storyboard(payload: StoryboardGenerateRequest, db: Session = Depends(get_db)):
-    fallback_data = build_storyboard_result(payload)
+    target_language = resolve_storyboard_target_language(
+        db,
+        project_id=payload.project_id,
+        script_polish_id=payload.scriptPolishId,
+        explicit_language=payload.language or payload.target_language,
+    )
+    fallback_data = build_storyboard_result(payload, target_language)
     ai_result = generate_storyboard_json(build_user_prompt(payload), fallback_data)
-    result = normalize_storyboard_result(ai_result, fallback_data, payload.sceneCount)
+    result = normalize_storyboard_result(ai_result, fallback_data, payload.sceneCount, target_language)
     log_storyboard_normalized_result(result)
     uniqueness = validate_storyboard_uniqueness(result["scenes"])
     logger.warning(
@@ -983,7 +1042,7 @@ def generate_storyboard(payload: StoryboardGenerateRequest, db: Session = Depend
         reasons = uniqueness["reasons"]
         logger.warning("AI分镜结果重复度过高，准备重试。reasons=%s", reasons)
         retry_ai_result = generate_storyboard_json(build_duplicate_retry_prompt(payload), fallback_data)
-        result = normalize_storyboard_result(retry_ai_result, fallback_data, payload.sceneCount)
+        result = normalize_storyboard_result(retry_ai_result, fallback_data, payload.sceneCount, target_language)
         log_storyboard_normalized_result(result)
         retry_uniqueness = validate_storyboard_uniqueness(result["scenes"])
         retry_reasons = retry_uniqueness["reasons"]
@@ -1006,14 +1065,20 @@ def generate_storyboard(payload: StoryboardGenerateRequest, db: Session = Depend
 
 @router.post("/stream")
 def stream_storyboard(payload: StoryboardGenerateRequest, db: Session = Depends(get_db)):
-    fallback_data = build_storyboard_result(payload)
+    target_language = resolve_storyboard_target_language(
+        db,
+        project_id=payload.project_id,
+        script_polish_id=payload.scriptPolishId,
+        explicit_language=payload.language or payload.target_language,
+    )
+    fallback_data = build_storyboard_result(payload, target_language)
 
     def event_generator():
         yield sse_event({"type": "meta", "data": {"storyboardTitle": fallback_data["storyboardTitle"], "style": fallback_data["style"]}})
         result = fallback_data
         try:
             if AI_PROVIDER == "deepseek" and AI_API_KEY:
-                result = stream_deepseek_storyboard(payload, fallback_data)
+                result = stream_deepseek_storyboard(payload, fallback_data, target_language)
         except HTTPException as exc:
             yield sse_event({"type": "error", "data": exc.detail})
             return
@@ -1033,7 +1098,7 @@ def stream_storyboard(payload: StoryboardGenerateRequest, db: Session = Depends(
                 return
             logger.warning("DeepSeek storyboard stream failed, using mock fallback: %s", exc)
             result = fallback_data
-        result = normalize_storyboard_result(result, fallback_data, payload.sceneCount)
+        result = normalize_storyboard_result(result, fallback_data, payload.sceneCount, target_language)
         log_storyboard_normalized_result(result)
         for scene in result["scenes"]:
             yield sse_event({"type": "scene", "data": scene})
@@ -1061,14 +1126,19 @@ def get_storyboard_history(
     records = query.order_by(Storyboard.created_at.desc()).limit(20).all()
     data = []
     for item in records:
+        target_language = resolve_storyboard_target_language(
+            db,
+            project_id=item.project_id,
+            script_polish_id=item.script_polish_id,
+        )
         fallback_payload = StoryboardGenerateRequest(title=item.title, script=item.script, style=item.style, sceneCount=item.scene_count)
-        fallback_data = build_storyboard_result(fallback_payload)
+        fallback_data = build_storyboard_result(fallback_payload, target_language)
         try:
             raw_result = json.loads(item.result_json)
         except Exception:
             raw_result = fallback_data
         # 历史记录可能保存的是旧结构，这里复用生成接口的归一化逻辑，保证前端点击历史也不会空白。
-        result = normalize_storyboard_result(raw_result, fallback_data, item.scene_count)
+        result = normalize_storyboard_result(raw_result, fallback_data, item.scene_count, target_language)
         data.append(
             {
                 "id": item.id,
