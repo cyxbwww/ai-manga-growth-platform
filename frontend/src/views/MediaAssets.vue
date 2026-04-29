@@ -24,6 +24,26 @@
                 @change="handleEpisodeChange"
               />
             </n-form-item>
+            <n-alert v-if="selectedProjectId" type="info" :bordered="false" class="context-note">
+              {{ mediaContextText }}
+            </n-alert>
+            <n-card size="small" title="本地化产物管理" class="localized-assets-card">
+              <div class="localized-assets-copy">
+                当前页面用于管理该分集的海外版本媒体资产，可上传原始视频、目标语言字幕、配音文件、口型匹配后视频和海外预览成片。
+              </div>
+              <div class="localized-assets-copy">
+                多语种本地化生成字幕/配音方向后，可在此上传或关联对应媒体文件，形成当前分集的海外版本资产。
+              </div>
+              <n-alert :type="episodeId ? 'success' : 'warning'" :bordered="false" class="localized-bind-alert">
+                {{ localizedAssetBindText }}
+              </n-alert>
+              <div class="localized-asset-types">
+                <div v-for="item in localizedAssetTypes" :key="item.title" class="localized-asset-type">
+                  <div class="localized-asset-title">{{ item.title }}</div>
+                  <div class="localized-asset-desc">{{ item.description }}</div>
+                </div>
+              </div>
+            </n-card>
             <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
               返回项目详情
             </n-button>
@@ -117,6 +137,23 @@ const episodeNo = ref<number | null>(null)
 
 const acceptTypes = '.mp4,.mov,.webm,.jpg,.jpeg,.png,.srt'
 const progressStatus = computed(() => (uploadProgress.value >= 100 ? 'success' : 'default'))
+const mediaContextText = computed(() =>
+  episodeId.value
+    ? '当前媒体资产将绑定到该分集，用于后续视频转码、字幕/配音文件管理和海外版本预览。'
+    : '当前为项目级媒体资产视角，可查看或上传该项目下的媒体素材；选择分集后会绑定到具体 episode。',
+)
+const localizedAssetBindText = computed(() =>
+  episodeId.value
+    ? `当前媒体资产将绑定到第 ${episodeNo.value || '-'} 集，用于后续视频转码、字幕/配音文件管理和海外版本预览。`
+    : '当前为项目级媒体资产视角，建议从分集管理或本地化结果进入，以便素材沉淀到具体分集。',
+)
+const localizedAssetTypes = [
+  { title: '原始视频', description: '用于后续转码和海外版本制作' },
+  { title: '目标语言字幕', description: '由本地化结果导出或人工上传 SRT/VTT' },
+  { title: '目标语言配音', description: '后续可接 TTS 或人工配音文件' },
+  { title: '口型匹配视频', description: '后续可接第三方 lip-sync 服务生成' },
+  { title: '海外预览成片', description: '用于审核和投放前预览' },
+]
 
 function handleProjectChange(_project: ShortDramaProject | null) {
   loadAssets()
@@ -318,6 +355,51 @@ onMounted(async () => {
 
 .upload-note {
   margin-bottom: 16px;
+}
+
+.context-note {
+  margin-bottom: 16px;
+}
+
+.localized-assets-card {
+  margin-bottom: 16px;
+  background: #fbfcff;
+}
+
+.localized-assets-copy {
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.localized-bind-alert {
+  margin: 10px 0 12px;
+}
+
+.localized-asset-types {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.localized-asset-type {
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.localized-asset-title {
+  color: #111827;
+  font-weight: 800;
+}
+
+.localized-asset-desc {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .project-back-btn {

@@ -12,7 +12,7 @@
                   @change="handleProjectChange"
                 />
               </n-form-item>
-              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
                 返回项目详情
               </n-button>
               <n-form-item label="项目名称">
@@ -184,7 +184,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NTag, useMessage } from 'naive-ui'
+import {NButton, NCard, NTag, useMessage} from 'naive-ui'
 import { createContentPlan, getContentPlanHistory } from '../api/content'
 import { generateEpisodeOutline } from '../api/episodes'
 import ProjectPicker from '../components/ProjectPicker.vue'

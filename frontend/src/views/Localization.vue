@@ -114,7 +114,8 @@
               </n-card>
 
               <div class="next-step-row">
-                <n-button type="primary" secondary @click="goWithContext('/ad-materials')">进入海外投放素材</n-button>
+                <div class="next-step-copy">本地化完成后，可进入媒体资产页上传原视频、字幕、配音文件，并管理当前分集的海外版本素材。</div>
+                <n-button type="primary" secondary @click="goWithContext('/media-assets')">进入媒体资产管理</n-button>
               </div>
             </template>
             <n-empty v-else description="选择配置后开始本地化，或点击历史记录查看已保存结果。" />
@@ -564,8 +565,17 @@ onMounted(async () => {
 
 .next-step-row {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 16px;
+}
+
+.next-step-copy {
+  flex: 1;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .episode-back-btn {

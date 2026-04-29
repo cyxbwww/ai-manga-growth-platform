@@ -140,7 +140,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMessage } from 'naive-ui'
+import {NButton, useMessage} from 'naive-ui'
 import { generateAds, getAdMaterialHistory } from '../api/ads'
 import { getPipelineDetail } from '../api/pipeline'
 import EpisodePicker from '../components/EpisodePicker.vue'

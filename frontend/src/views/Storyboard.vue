@@ -21,10 +21,10 @@
                   @change="handleEpisodeChange"
                 />
               </n-form-item>
-              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}`)">
                 返回项目详情
               </n-button>
-              <n-button v-if="selectedProjectId" tertiary size="small" class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
+              <n-button v-if="selectedProjectId" secondary block class="project-back-btn" @click="router.push(`/projects/${selectedProjectId}/episodes`)">
                 返回分集列表
               </n-button>
               <n-alert v-if="inputHydrateTip.message" :type="inputHydrateTip.type" :bordered="false" class="input-hydrate-tip">
