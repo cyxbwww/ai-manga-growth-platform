@@ -94,7 +94,7 @@
               <n-space align="center">
                 <n-radio-group v-if="result?.bilingual" v-model:value="displayLanguage" size="small">
                   <n-radio-button value="zh">中文</n-radio-button>
-                  <n-radio-button value="target">{{ result.bilingual.target.language || '目标语言' }}</n-radio-button>
+                  <n-radio-button value="target">{{ targetLanguageLabel }}</n-radio-button>
                 </n-radio-group>
                 <n-tag type="info" bordered>辅助内容精品化</n-tag>
               </n-space>
@@ -259,7 +259,20 @@ const scriptView = computed<ScriptPolishBilingualFields>(() => {
       optimizationTips: result.value?.optimizationTips || [],
     }
   }
-  return displayLanguage.value === 'target' ? result.value.bilingual.target : result.value.bilingual.zh
+  const view = displayLanguage.value === 'target' ? result.value.bilingual.target : result.value.bilingual.zh
+  return {
+    polishedScript: view.polishedScript || result.value.polishedScript || '',
+    optimizationTips: view.optimizationTips?.length ? view.optimizationTips : result.value.optimizationTips || [],
+  }
+})
+
+const targetLanguageLabel = computed(() => {
+  const language =
+    result.value?.target_language ||
+    result.value?.language ||
+    result.value?.bilingual?.target?.language ||
+    selectedLanguage.value
+  return getLabel('languages', language) || '目标语言'
 })
 
 const isEpisodeMode = computed(() => Boolean(selectedEpisodeId.value))
