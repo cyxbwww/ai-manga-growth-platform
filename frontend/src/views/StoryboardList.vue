@@ -72,11 +72,13 @@ import { NButton, NSpace, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getProjects } from '../api/projects'
 import { getStoryboardHistory } from '../api/storyboard'
+import { useDictionaries } from "../composables/useDictionaries";
 import type { StoryboardHistoryItem, StoryboardScene, StoryboardSceneText } from '../types/storyboard'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const { getLabel } = useDictionaries()
 const loading = ref(false)
 const rows = ref<StoryboardHistoryItem[]>([])
 const projectOptions = ref<{ label: string; value: number }[]>([])
@@ -114,7 +116,7 @@ function hasConsistency(row: StoryboardHistoryItem) {
 
 function targetLanguage(row: StoryboardHistoryItem) {
   const target = row.result?.scenes?.find((scene) => typeof scene.bilingual?.target === 'object')?.bilingual?.target
-  return typeof target === 'object' ? target.language || '-' : '-'
+  return typeof target === 'object' ? getLabel('languages', target.language) || '-' : '-'
 }
 
 const filteredRows = computed(() => {
@@ -132,7 +134,7 @@ const columns: DataTableColumns<StoryboardHistoryItem> = [
   { title: '分集 ID', key: 'episode_id', width: 90, render: (row) => row.episode_id || '-' },
   { title: '剧集编号 / 分镜标题', key: 'title', minWidth: 180, render: (row) => row.result?.storyboardTitle || row.title || '-' },
   { title: '分镜数量', key: 'sceneCount', width: 100, render: (row) => sceneCount(row) },
-  { title: '目标语言', key: 'language', width: 110, render: (row) => targetLanguage(row) },
+  { title: '目标语言', key: 'language', width: 150, render: (row) => targetLanguage(row) },
   {
     title: '角色一致性状态',
     key: 'consistency',
@@ -257,7 +259,7 @@ onMounted(async () => {
 }
 
 .json-box {
-  max-height: 560px;
+  max-height: 680px;
   padding: 14px;
   overflow: auto;
   border-radius: 8px;

@@ -64,11 +64,13 @@ import { NButton, NSpace, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getLocalizationHistory } from '../api/localization'
 import { getProjects } from '../api/projects'
+import { useDictionaries } from "../composables/useDictionaries";
 import type { LocalizationHistoryItem } from '../types/localization'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const { getLabel } = useDictionaries()
 const loading = ref(false)
 const rows = ref<LocalizationHistoryItem[]>([])
 const projectOptions = ref<{ label: string; value: number }[]>([])
@@ -110,10 +112,10 @@ const filteredRows = computed(() => rows.value.filter((row) => {
 }))
 
 const columns: DataTableColumns<LocalizationHistoryItem> = [
-  { title: '所属项目', key: 'project_id', minWidth: 160, render: (row) => row.project_id ? projectNameMap.value[row.project_id] || `项目 ${row.project_id}` : '-' },
+  { title: '所属项目', key: 'project_id', width: 200, render: (row) => row.project_id ? projectNameMap.value[row.project_id] || `项目 ${row.project_id}` : '-' },
   { title: '集数', key: 'episode_no', width: 90, render: (row) => row.episode_no ? `第 ${row.episode_no} 集` : '-' },
   { title: '分集 ID', key: 'episode_id', width: 90, render: (row) => row.episode_id || '-' },
-  { title: '目标语言', key: 'language', width: 110 },
+  { title: '目标语言', key: 'language', width: 140, render: (row) => getLabel('languages', row.language) },
   { title: '本地化类型', key: 'strategy', width: 130 },
   { title: '中文审核稿摘要', key: 'originalText', minWidth: 180, render: (row) => summary(firstSubtitle(row)?.originalText) },
   { title: '目标语言稿摘要', key: 'localizedText', minWidth: 220, render: (row) => summary(firstSubtitle(row)?.localizedText) },

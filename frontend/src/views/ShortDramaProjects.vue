@@ -165,7 +165,7 @@
 import { h, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { DataTableColumns } from 'naive-ui'
-import { NButton, NPopconfirm, NSpace, NTag, useMessage } from 'naive-ui'
+import { NButton, NPopconfirm, NSpace, NTag, NTooltip, useMessage } from 'naive-ui'
 import { archiveProject, createProject, getProjects, updateProject } from '../api/projects'
 import { useDictionaries } from '../composables/useDictionaries'
 import type {
@@ -236,11 +236,18 @@ const columns: DataTableColumns<ShortDramaProject> = [
   {
     title: '项目名称',
     key: 'name',
-    minWidth: 420,
+    minWidth: 220,
     render(row) {
       return h('div', { class: 'project-name-cell' }, [
-        h('div', { class: 'project-name' }, row.name),
-        h('div', { class: 'project-desc' }, row.description || '暂无项目简介'),
+        h(NTooltip,  { trigger: 'hover', placement: 'top-start', style: 'width: 600px' }, {
+          trigger: () =>
+            h(
+              'div',
+              { class: 'project-name' },
+              row.name
+            ),
+          default: () => row.description || '暂无项目简介'
+        }),
       ])
     },
   },

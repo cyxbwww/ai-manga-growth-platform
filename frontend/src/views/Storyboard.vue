@@ -100,8 +100,8 @@
                       <div class="scene-title story-content">{{ getSceneDisplay(scene).title }}</div>
                     </div>
                     <n-space align="center">
-                      <n-tag type="default" bordered>待上传</n-tag>
                       <n-button size="small" secondary @click="goWithContext('/media-assets')">上传镜头素材</n-button>
+                      <n-tag type="default" bordered>待上传</n-tag>
                       <n-tag :type="statusType(getSceneDisplay(scene).status)" bordered>{{ getSceneDisplay(scene).status }}</n-tag>
                     </n-space>
                   </div>

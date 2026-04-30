@@ -95,7 +95,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { DataTableColumns } from 'naive-ui'
+import {DataTableColumns, NTooltip} from 'naive-ui'
 import { NButton, NPopconfirm, NSpace, NTag, useMessage } from 'naive-ui'
 import { getProjectDetail } from '../api/projects'
 import {
@@ -254,15 +254,23 @@ function goAssetList(path: string, row: ShortDramaEpisode) {
 }
 
 const columns: DataTableColumns<ShortDramaEpisode> = [
-  { title: '集数', key: 'episode_no', width: 80, render: (row) => `第 ${row.episode_no} 集` },
+  // { title: '集数', key: 'episode_no', width: 80, render: (row) => `第 ${row.episode_no} 集` },
   {
     title: '分集标题',
     key: 'title',
-    minWidth: 180,
+    width: 180,
     render(row) {
-      return h('div', { class: 'title-cell' }, [
-        h('div', { class: 'episode-title' }, row.title),
-        h('div', { class: 'episode-summary' }, row.summary || '暂无剧情摘要'),
+      return h('div', { class: 'title-cell' },
+      [
+        h(NTooltip,  { trigger: 'hover', placement: 'top-start', style: 'width: 600px' }, {
+          trigger: () =>
+            h(
+              'div',
+              { class: 'episode-title' },
+              row.title
+            ),
+          default: () => row.summary || '暂无剧情摘要'
+        }),
       ])
     },
   },
@@ -309,7 +317,7 @@ const columns: DataTableColumns<ShortDramaEpisode> = [
   {
     title: '资产沉淀',
     key: 'asset_counts',
-    width: 260,
+    width: 180,
     render(row) {
       return h(NSpace, { size: 6, wrap: true }, {
         default: () => [
@@ -332,7 +340,7 @@ const columns: DataTableColumns<ShortDramaEpisode> = [
   {
     title: '操作',
     key: 'actions',
-    width: 700,
+    width: 380,
     fixed: 'right',
     render(row) {
       return h(NSpace, { size: 6, wrap: true }, {

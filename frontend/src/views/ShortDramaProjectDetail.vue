@@ -33,7 +33,7 @@
           </n-grid>
         </n-card>
 
-        <n-grid :cols="6" :x-gap="14" :y-gap="14" responsive="screen">
+        <n-grid :cols="5" :x-gap="14" :y-gap="14" responsive="screen">
           <n-grid-item v-for="item in statCards" :key="item.label" :s-span="12">
             <n-card bordered class="stat-card">
               <n-statistic :label="item.label" :value="item.value" />
@@ -143,6 +143,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getProjectOverview } from '../api/projects'
+import {useDictionaries} from "../composables/useDictionaries";
 import type { ProjectOverview, ShortDramaProjectPriority, ShortDramaProjectStage, ShortDramaProjectStatus } from '../types/project'
 
 const route = useRoute()
@@ -150,6 +151,7 @@ const router = useRouter()
 const message = useMessage()
 const loading = ref(false)
 const overview = ref<ProjectOverview | null>(null)
+const { getLabel } = useDictionaries()
 
 const stageText: Record<ShortDramaProjectStage, string> = {
   planning: '策划中',
@@ -203,7 +205,7 @@ const projectMeta = computed(() => {
   return [
     { label: '题材类型', value: project.genre },
     { label: '目标市场', value: project.target_market },
-    { label: '主语言', value: project.language },
+    { label: '主语言', value: getLabel('languages', project.language) },
     { label: '计划集数', value: `${project.episode_count} 集` },
     { label: '当前阶段', value: stageText[project.stage], tag: true, type: 'info' },
     { label: '项目状态', value: statusText[project.status], tag: true, type: project.status === 'active' ? 'success' : 'default' },
