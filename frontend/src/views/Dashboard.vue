@@ -80,18 +80,18 @@
         <n-grid-item :s-span="24">
           <n-card title="最近分集" bordered class="list-card">
             <template v-if="summary.recentEpisodes.length">
-              <div v-for="episode in summary.recentEpisodes" :key="episode.id" class="list-row clickable" @click="goEpisodes(episode.project_id)">
-                <div class="row-main">
-                  <div class="row-title">{{ episode.project_name }} / 第 {{ episode.episode_no }} 集：{{ episode.title }}</div>
-                  <div class="row-meta">更新于 {{ formatTime(episode.updated_at) }}</div>
+              <div v-for="episode in summary.recentEpisodes" :key="episode.id" class="recent-episode-item clickable" @click="goEpisodes(episode.project_id)">
+                <div class="episode-info">
+                  <div class="episode-title">{{ episode.project_name }} / 第 {{ episode.episode_no }} 集：{{ episode.title }}</div>
+                  <div class="episode-time">更新于 {{ formatTime(episode.updated_at) }}</div>
                 </div>
-                <n-space size="small">
+                <div class="episode-actions">
                   <n-tag :type="episodeStageTagType(episode.stage)" bordered>{{ episodeStageText[episode.stage] || episode.stage }}</n-tag>
                   <n-tag bordered>分镜 {{ subStatusText(episode.storyboard_status) }}</n-tag>
                   <n-tag bordered>本地化 {{ subStatusText(episode.localization_status) }}</n-tag>
                   <n-tag bordered>媒体 {{ subStatusText(episode.media_status) }}</n-tag>
                   <n-button size="small" secondary @click.stop="goEpisodes(episode.project_id)">进入分集管理</n-button>
-                </n-space>
+                </div>
               </div>
             </template>
             <n-empty v-else description="暂无分集数据，进入项目详情后可批量生成分集。">
@@ -476,11 +476,54 @@ onMounted(async () => {
   border-bottom: 0;
 }
 
+.recent-episode-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, auto);
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.recent-episode-item:last-child {
+  border-bottom: 0;
+}
+
+.episode-info {
+  min-width: 0;
+}
+
+.episode-title {
+  overflow: hidden;
+  color: #111827;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.episode-time {
+  margin-top: 5px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.episode-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 520px;
+  white-space: nowrap;
+}
+
 .clickable {
   cursor: pointer;
 }
 
-.clickable:hover .row-title {
+.clickable:hover .row-title,
+.clickable:hover .episode-title {
   color: #18a058;
 }
 
@@ -549,6 +592,16 @@ onMounted(async () => {
   .list-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .recent-episode-item {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+  }
+
+  .episode-actions {
+    justify-content: flex-start;
+    max-width: 100%;
   }
 
   .stage-grid {
