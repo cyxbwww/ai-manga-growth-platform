@@ -15,7 +15,7 @@
     </n-layout-sider>
 
     <n-layout class="app-main">
-      <n-layout-header bordered class="app-header">
+      <n-layout-header bordered class="app-header page-header">
         <div>
           <div class="page-title">{{ pageTitle }}</div>
           <div class="page-subtitle">从内容策划、剧本打磨、AI分镜、多语种本地化，到素材上传、视频预览和投放分析的一体化 AI 短剧生产系统。</div>
@@ -147,7 +147,7 @@ function handleMenuChange(key: string) {
   --app-sider-width: 232px;
   height: 100vh;
   min-height: 100vh;
-  overflow: visible;
+  overflow: hidden;
   background: #f5f7fb;
 }
 
@@ -170,7 +170,7 @@ function handleMenuChange(key: string) {
 .app-main {
   height: 100vh;
   margin-left: var(--app-sider-width);
-  overflow-y: auto;
+  overflow: hidden;
   background: #f5f7fb;
 }
 
@@ -203,11 +203,19 @@ function handleMenuChange(key: string) {
 }
 
 .app-header {
+  flex: 0 0 72px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   height: 72px;
   padding: 0 28px;
   background: #ffffff;
+}
+
+.page-header {
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .page-title {
@@ -223,8 +231,10 @@ function handleMenuChange(key: string) {
 }
 
 .app-content {
-  min-height: calc(100vh - 72px);
-  padding: 24px;
+  height: calc(100vh - 72px);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 0 12px 12px;
   background: #f5f7fb;
 }
 
