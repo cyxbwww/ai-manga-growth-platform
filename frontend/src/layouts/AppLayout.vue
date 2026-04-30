@@ -156,7 +156,7 @@ function handleMenuChange(key: string) {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 64px;
+  height: 72px;
   padding: 0 18px;
   border-bottom: 1px solid #edf0f5;
   background: #ffffff;

@@ -3,7 +3,7 @@
     <div class="picker-card" :class="{ disabled: disabled || !projectId }">
       <div class="picker-main">
         <template v-if="selectedEpisode">
-          <div class="episode-title">第 {{ selectedEpisode.episode_no }} 集：{{ selectedEpisode.title }}</div>
+          <div class="episode-title">{{ selectedEpisode.title }}</div>
           <n-space size="small" class="episode-tags">
             <n-tag :type="stageTagType(selectedEpisode.stage)" size="small" :bordered="false">{{ stageMap[selectedEpisode.stage] }}</n-tag>
             <n-tag :type="subStatusTagType(selectedEpisode.storyboard_status)" size="small" :bordered="false">分镜 {{ subStatusLabel(selectedEpisode.storyboard_status) }}</n-tag>
@@ -196,7 +196,7 @@ function openModal() {
 }
 
 const columns: DataTableColumns<ShortDramaEpisode> = [
-  { title: '集数', key: 'episode_no', width: 90, render: (row) => `第 ${row.episode_no} 集` },
+  // { title: '集数', key: 'episode_no', width: 90, render: (row) => `第 ${row.episode_no} 集` },
   { title: '分集标题', key: 'title', minWidth: 180 },
   {
     title: '当前阶段',

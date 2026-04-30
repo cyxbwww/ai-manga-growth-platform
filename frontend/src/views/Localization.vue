@@ -28,7 +28,7 @@
 
           <n-form-item label="目标市场">
             <n-select
-              v-model:value="form.market"
+              v-model:value="form.targetMarket"
               filterable
               label-field="label"
               value-field="value"
@@ -40,7 +40,7 @@
 
           <n-form-item label="目标语言">
             <n-select
-              v-model:value="form.language"
+              v-model:value="form.targetLanguage"
               filterable
               label-field="label"
               value-field="value"
@@ -56,7 +56,7 @@
 
           <n-form-item label="本地化输入内容" class="source-input-item">
             <n-input
-              v-model:value="form.source_text"
+              v-model:value="form.sourceText"
               type="textarea"
               :autosize="{ minRows: 8, maxRows: 12 }"
               placeholder="选择项目和分集后会自动引用分集级剧本打磨结果；也可以手动填写中文剧本或分集大纲。"
@@ -92,17 +92,17 @@
 
               <n-card size="small" title="本地化改写对比" class="compare-card">
                 <n-grid :cols="3" :x-gap="14" :y-gap="14" responsive="screen">
-                  <n-grid-item>
+                  <n-grid-item v-for="item in comparisonRows" :key="item.originalText + item.localizedText">
                     <div class="compare-label">中文原文</div>
-                    <div class="compare-text">你怎么能这样对我？</div>
+                    <div class="compare-text">{{ item.originalText }}</div>
                   </n-grid-item>
-                  <n-grid-item>
+                  <n-grid-item v-for="item in comparisonRows" :key="item.directTranslation + item.originalText">
                     <div class="compare-label">直译</div>
-                    <div class="compare-text">How could you do this to me?</div>
+                    <div class="compare-text">{{ item.directTranslation }}</div>
                   </n-grid-item>
-                  <n-grid-item>
+                  <n-grid-item v-for="item in comparisonRows" :key="item.localizedText + item.directTranslation">
                     <div class="compare-label">本地化改写</div>
-                    <div class="compare-text strong">After everything I gave up for you, this is how you repay me?</div>
+                    <div class="compare-text strong">{{ item.localizedText }}</div>
                   </n-grid-item>
                 </n-grid>
               </n-card>
@@ -119,7 +119,7 @@
         <n-card title="海外版本生产流程" :bordered="false" class="workflow-card">
           <n-timeline v-if="result">
             <n-timeline-item
-              v-for="item in result.workflow"
+              v-for="item in workflowRows"
               :key="item.step"
               :type="workflowType(item.status)"
               :title="item.step"
@@ -168,10 +168,10 @@ const pipeline = usePipelineStore()
 const { dictionaries, loadDictionaries } = useDictionaries()
 
 const form = reactive<LocalizationProcessRequest>({
-  market: '北美',
-  language: 'en-US',
+  targetMarket: '北美',
+  targetLanguage: 'en-US',
   strategy: '情绪强化',
-  source_text: '',
+  sourceText: '',
 })
 
 const loading = ref(false)
@@ -241,28 +241,28 @@ function setSourceNotice(messageText: string, type: 'info' | 'warning' | 'succes
 }
 
 function applySourceText(text: string, notice: string, type: 'info' | 'warning' | 'success' = 'success') {
-  if (sourceTextTouched.value && form.source_text?.trim()) {
+  if (sourceTextTouched.value && form.sourceText?.trim()) {
     setSourceNotice('当前本地化输入已手动编辑，未自动覆盖。', 'warning')
     return
   }
-  form.source_text = text
+  form.sourceText = text
   setSourceNotice(notice, type)
 }
 
 function applyProjectDefaults(project: ShortDramaProject | null) {
   if (!project) return
-  if ((!targetMarketTouched.value || !form.market) && project.target_market) {
-    form.market = project.target_market
+  if ((!targetMarketTouched.value || !form.targetMarket) && project.target_market) {
+    form.targetMarket = project.target_market
   }
   const projectLanguage = (project as ShortDramaProject & { primary_language?: string }).primary_language || project.language
-  if ((!targetLanguageTouched.value || !form.language) && projectLanguage) {
-    form.language = projectLanguage
+  if ((!targetLanguageTouched.value || !form.targetLanguage) && projectLanguage) {
+    form.targetLanguage = projectLanguage
   }
 }
 
 async function autoFillLocalizationSource() {
   if (!selectedProjectId.value || !episodeId.value) return
-  if (sourceTextTouched.value && form.source_text?.trim()) {
+  if (sourceTextTouched.value && form.sourceText?.trim()) {
     setSourceNotice('当前本地化输入已手动编辑，未自动覆盖。', 'warning')
     return
   }
@@ -310,7 +310,7 @@ function handleProjectChange(project: ShortDramaProject | null) {
   if (previousProjectId && project?.id !== previousProjectId) {
     episodeId.value = null
     episodeNo.value = null
-    if (!sourceTextTouched.value) form.source_text = ''
+    if (!sourceTextTouched.value) form.sourceText = ''
   }
   loadHistory()
   autoFillLocalizationSource()
@@ -347,6 +347,13 @@ const columns = computed<DataTableColumns<LocalizedSubtitle>>(() => [
   { title: '字幕', key: 'subtitleStatus', width: 96, render: (row) => h(NTag, { type: statusTag(row.subtitleStatus), bordered: false }, { default: () => row.subtitleStatus }) },
 ])
 
+const comparisonRows = computed(() => {
+  const rows = result.value?.comparison?.length ? result.value.comparison : result.value?.subtitles || []
+  return rows.slice(0, 1)
+})
+
+const workflowRows = computed(() => result.value?.workflowSteps || result.value?.workflow || [])
+
 function formatTime(value: string) {
   return new Date(value).toLocaleString()
 }
@@ -356,10 +363,10 @@ function selectHistory(item: LocalizationHistoryItem) {
   sourceTextTouched.value = true
   targetMarketTouched.value = true
   targetLanguageTouched.value = true
-  form.market = (item as unknown as LooseRecord).target_market || item.market
-  form.language = (item as unknown as LooseRecord).target_language || item.language
+  form.targetMarket = (item as unknown as LooseRecord).targetMarket || (item as unknown as LooseRecord).target_market || item.market || ''
+  form.targetLanguage = (item as unknown as LooseRecord).targetLanguage || (item as unknown as LooseRecord).target_language || item.language || ''
   form.strategy = item.strategy
-  form.source_text = extractHistorySourceText(item)
+  form.sourceText = extractHistorySourceText(item)
   setSourceNotice('已从历史记录恢复本地化输入和上下文。', 'info')
   // 点击历史时恢复链路 ID，旧数据没有这些字段时自动跳过。
   if (item.contentPlanId) pipeline.setContentPlanId(item.contentPlanId)
@@ -391,19 +398,30 @@ function loadEpisodeQuery() {
 
 async function handleProcess() {
   if (!selectedProjectId.value) {
-    message.warning('建议选择短剧项目，方便沉淀到完整生产链路。')
+    message.warning('请先选择项目和分集。')
+    return
   }
   if (!episodeId.value) {
-    message.warning('请选择具体分集，本地化结果需要沉淀到对应集数。')
+    message.warning('请先选择项目和分集。')
+    return
+  }
+  if (!form.sourceText?.trim()) {
+    message.warning('请先输入需要本地化的剧本文本')
     return
   }
   loading.value = true
   try {
     const response = await processLocalization({
       ...form,
+      projectId: selectedProjectId.value,
+      episodeId: episodeId.value,
+      episodeNo: episodeNo.value,
       project_id: selectedProjectId.value,
       episode_id: episodeId.value,
       episode_no: episodeNo.value,
+      market: form.targetMarket,
+      language: form.targetLanguage,
+      source_text: form.sourceText,
       contentPlanId: pipeline.contentPlanId,
       scriptPolishId: pipeline.scriptPolishId,
       storyboardId: pipeline.storyboardId,

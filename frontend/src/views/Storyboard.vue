@@ -107,12 +107,12 @@
                   </div>
 
                   <div class="story-card-body">
-                    <div class="story-image">
-                      <div>
-                        <div class="image-placeholder-title">待生成画面</div>
-                        <div class="image-placeholder-sub">{{ result.style }}</div>
-                      </div>
-                    </div>
+<!--                    <div class="story-image">-->
+<!--                      <div>-->
+<!--                        <div class="image-placeholder-title">待生成画面</div>-->
+<!--                        <div class="image-placeholder-sub">{{ result.style }}</div>-->
+<!--                      </div>-->
+<!--                    </div>-->
 
                     <div class="story-info-panel">
                       <section class="story-section">

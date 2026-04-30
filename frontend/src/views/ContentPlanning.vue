@@ -155,7 +155,7 @@
       </n-grid-item>
     </n-grid>
 
-    <n-modal v-model:show="showOutlineModal" preset="card" title="生成分集大纲" class="outline-modal" :style="{ width: '70%' }">
+    <n-modal v-model:show="showOutlineModal" preset="card" title="生成分集大纲" class="outline-modal" :style="{ width: '50%' }">
       <p class="outline-desc">系统会基于当前内容策划结果生成分集大纲初稿，优先使用 DeepSeek 生成，失败时自动使用规则兜底，保证流程可用。生成后可在分集管理中逐集调整。</p>
       <n-form :model="outlineForm" label-placement="top">
         <n-form-item label="生成集数">
