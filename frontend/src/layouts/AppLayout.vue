@@ -14,7 +14,7 @@
       />
     </n-layout-sider>
 
-    <n-layout>
+    <n-layout class="app-main">
       <n-layout-header bordered class="app-header">
         <div>
           <div class="page-title">{{ pageTitle }}</div>
@@ -144,15 +144,38 @@ function handleMenuChange(key: string) {
 <style scoped>
 /* 后台工具型布局：强调清晰、稳定和可演示。 */
 .app-shell {
+  --app-sider-width: 232px;
+  height: 100vh;
   min-height: 100vh;
+  overflow: visible;
   background: #f5f7fb;
 }
 
 .app-sider {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: var(--app-sider-width) !important;
+  height: 100vh;
   background: #ffffff;
 }
 
+.app-sider :deep(.n-layout-sider-scroll-container) {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-main {
+  height: 100vh;
+  margin-left: var(--app-sider-width);
+  overflow-y: auto;
+  background: #f5f7fb;
+}
+
 .brand {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -211,6 +234,9 @@ function handleMenuChange(key: string) {
 }
 
 .side-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 10px 10px 18px;
 }
 
